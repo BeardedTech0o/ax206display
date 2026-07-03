@@ -1,0 +1,13 @@
+{
+  "solution": {
+    "path": "Ax206Display.sln",
+    "projects": [
+      "src/Ax206Display.Protocol/Ax206Display.Protocol.csproj",
+      "src/Ax206Display.Transport/Ax206Display.Transport.csproj",
+      "src/Ax206Display.Rendering/Ax206Display.Rendering.csproj",
+      "src/Ax206Display.DataSources/Ax206Display.DataSources.csproj",
+      "src/Ax206Display.Config/Ax206Display.Config.csproj",
+      "tests/Ax206Display.Tests/Ax206Display.Tests.csproj"
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- SkiaSharp.Views.WPF's last net8.0-compatible build targets Windows 10.0.19041. -->
+    <TargetFramework>net8.0-windows10.0.19041</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>Ax206Display</AssemblyName>
+    <RootNamespace>Ax206Display.App</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pinned to the last version with a net8.0-windows7.0 target; 2.4.x moved to net10.0-windows7.0. -->
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.3.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
+    <!-- Pinned to the last version with a net8.0-windows target; 3.119.4 moved to net9.0-windows. -->
+    <PackageReference Include="SkiaSharp.Views.WPF" Version="3.119.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ax206Display.Config\Ax206Display.Config.csproj" />
+    <ProjectReference Include="..\Ax206Display.DataSources\Ax206Display.DataSources.csproj" />
+    <ProjectReference Include="..\Ax206Display.Protocol\Ax206Display.Protocol.csproj" />
+    <ProjectReference Include="..\Ax206Display.Rendering\Ax206Display.Rendering.csproj" />
+    <ProjectReference Include="..\Ax206Display.Transport\Ax206Display.Transport.csproj" />
+  </ItemGroup>
+
+</Project>
