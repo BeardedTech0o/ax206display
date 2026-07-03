@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  linux-build-test:
+    name: Linux (build + test cross-platform projects)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # The WPF app (Ax206Display.App) can only be restored/built on Windows,
+      # so this job targets a solution filter with everything except it:
+      # Protocol/Transport/Rendering/DataSources/Config + the test project.
+      - name: Restore
+        run: dotnet restore Ax206Display.CrossPlatform.slnf
+
+      - name: Build
+        run: dotnet build Ax206Display.CrossPlatform.slnf --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Ax206Display.CrossPlatform.slnf --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-test-results
+          path: tests/Ax206Display.Tests/TestResults/test-results.trx
+
+  windows-build:
+    name: Windows (build WPF app)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore Ax206Display.sln
+
+      - name: Build
+        run: dotnet build Ax206Display.sln --configuration Release --no-restore
