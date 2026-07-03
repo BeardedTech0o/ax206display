@@ -13,12 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Pinned to the last version with a net8.0-windows7.0 target; 2.4.x moved to net10.0-windows7.0. -->
-    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.3.2" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
-    <!-- Pinned to the last version with a net8.0-windows target; 3.119.4 moved to net9.0-windows. -->
-    <PackageReference Include="SkiaSharp.Views.WPF" Version="3.119.2" />
+    <PackageReference Include="H.NotifyIcon.Wpf" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="SkiaSharp.Views.WPF" />
   </ItemGroup>
 
   <ItemGroup>

@@ -11,6 +11,29 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <Company>ax206display</Company>
     <Product>ax206display</Product>
+
+    <!-- Build hardening (see docs' security-audit follow-up) -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Intel CET shadow-stack support in the generated apphost (net7+, Windows only; a no-op elsewhere). -->
+    <CetCompat>true</CetCompat>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- Dependency integrity: pin the full resolved graph (including
+         transitive packages), not just the direct versions already pinned in
+         Directory.Packages.props, and audit it against known CVEs. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>moderate</NuGetAuditLevel>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <!-- Symbol stripping: don't ship PDBs in Release output. -->
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
   </PropertyGroup>
 
 </Project>

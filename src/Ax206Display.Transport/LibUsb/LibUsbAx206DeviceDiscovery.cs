@@ -1,5 +1,7 @@
 using Ax206Display.Transport.Discovery;
 using LibUsbDotNet.LibUsb;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Ax206Display.Transport.LibUsb;
 
@@ -9,9 +11,15 @@ namespace Ax206Display.Transport.LibUsb;
 /// see <see cref="IAx206DeviceDiscovery"/> for why this never filters by a
 /// hardcoded VID/PID.
 /// </summary>
-public sealed class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, IDisposable
+public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, IDisposable
 {
     private readonly UsbContext _context = new();
+    private readonly ILogger<LibUsbAx206DeviceDiscovery> _logger;
+
+    public LibUsbAx206DeviceDiscovery(ILogger<LibUsbAx206DeviceDiscovery>? logger = null)
+    {
+        _logger = logger ?? NullLogger<LibUsbAx206DeviceDiscovery>.Instance;
+    }
 
     public async Task<IReadOnlyList<IAx206Transport>> DiscoverAsync(CancellationToken cancellationToken = default)
     {
@@ -32,12 +40,13 @@ public sealed class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, IDisposa
         return discovered;
     }
 
-    private static async Task<IAx206Transport?> TryOpenAsDisplayAsync(IUsbDevice device, CancellationToken cancellationToken)
+    private async Task<IAx206Transport?> TryOpenAsDisplayAsync(IUsbDevice device, CancellationToken cancellationToken)
     {
         try
         {
             if (!device.TryOpen() || !device.ClaimInterface(0))
             {
+                LogSkippedUnclaimable(device.Info.VendorId, device.Info.ProductId);
                 SafeClose(device);
                 return null;
             }
@@ -51,21 +60,38 @@ public sealed class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, IDisposa
             var parameters = await transport.GetLcdParametersAsync(cancellationToken);
             if (!parameters.HasPlausibleDimensions)
             {
+                LogImplausibleResponse(deviceId, parameters.Width, parameters.Height);
                 transport.Dispose();
                 return null;
             }
 
+            LogDisplayFound(deviceId, parameters.Width, parameters.Height);
             return transport;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Expected for the many non-display USB devices on a typical machine
             // (hubs, keyboards, other vendor-private protocols that don't speak
-            // this CBW/CSW dialect, devices busy with another driver, ...).
+            // this CBW/CSW dialect, devices busy with another driver, ...) - logged
+            // at Warning rather than escalated so discovery keeps scanning, but the
+            // rejection is still visible for later troubleshooting.
+            LogRejectedDuringProbe(ex, device.Info.VendorId, device.Info.ProductId);
             SafeClose(device);
             return null;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Skipping USB device {VendorId:X4}:{ProductId:X4} - could not open or claim interface 0.")]
+    private partial void LogSkippedUnclaimable(ushort vendorId, ushort productId);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Rejecting USB device {DeviceId} - implausible GetLcdParameters response ({Width}x{Height}).")]
+    private partial void LogImplausibleResponse(string deviceId, ushort width, ushort height);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Found AX206 display {DeviceId} ({Width}x{Height}).")]
+    private partial void LogDisplayFound(string deviceId, ushort width, ushort height);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rejecting USB device {VendorId:X4}:{ProductId:X4} during AX206 discovery.")]
+    private partial void LogRejectedDuringProbe(Exception exception, ushort vendorId, ushort productId);
 
     private static void SafeClose(IUsbDevice device)
     {

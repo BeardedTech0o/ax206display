@@ -54,3 +54,18 @@ dotnet build Ax206Display.sln
 CI (`.github/workflows/ci.yml`) mirrors this split: a Linux job builds and
 tests the cross-platform projects, and a `windows-latest` job builds the full
 solution including the WPF app.
+
+## Security
+
+TLS to UniFi/Proxmox uses certificate pinning
+(`IntegrationConfig.PinnedCertificateSha256Thumbprint`), not a blanket
+"accept any certificate" bypass, since both commonly serve self-signed
+certs on a LAN. Secrets are DPAPI-encrypted at rest (`Ax206Display.Config.Secrets`)
+and their in-memory buffers are zeroed after use. The app currently runs
+elevated (`requireAdministrator`) for USB/Task Scheduler access; see
+[`docs/privilege-separation.md`](docs/privilege-separation.md) for a proposed
+design to shrink that to a minimal elevated broker process in a future
+milestone. The build enforces `TreatWarningsAsErrors` with
+`AnalysisLevel=latest-recommended`, pins the full dependency graph via
+`packages.lock.json` + `Directory.Packages.props`, and gates CI on
+`NuGetAudit`/`dotnet list package --vulnerable`.

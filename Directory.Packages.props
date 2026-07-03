@@ -1,0 +1,34 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />
+
+    <!-- Pinned to the last version with a plain net8.0 target; 0.9.6+ moved to net8.0-windows7.0. -->
+    <PackageVersion Include="LibreHardwareMonitorLib" Version="0.9.5" />
+
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+
+    <!-- Pinned to the last version with a plain net8.0 target; 4.148.0 moved to a later scheme -->
+    <PackageVersion Include="SkiaSharp" Version="3.119.2" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="3.119.2" />
+    <!-- Pinned to the last version with a net8.0-windows target; 3.119.4 moved to net9.0-windows. -->
+    <PackageVersion Include="SkiaSharp.Views.WPF" Version="3.119.2" />
+
+    <!-- Pinned to the last version with a net8.0-windows7.0 target; 2.4.x moved to net10.0-windows7.0. -->
+    <PackageVersion Include="H.NotifyIcon.Wpf" Version="2.3.2" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="8.0.1" />
+
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+  </ItemGroup>
+
+</Project>

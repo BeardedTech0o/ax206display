@@ -10,7 +10,7 @@ namespace Ax206Display.Transport.LibUsb;
 /// Drives a real AX206 display over libusb (via LibUsbDotNet), using the
 /// Bulk-Only-Transport-shaped CBW/data/CSW exchange documented in
 /// docs/protocol-spec.md. The device must already be open with interface 0
-/// claimed before construction (see <see cref="Discovery.LibUsbAx206DeviceDiscovery"/>).
+/// claimed before construction (see <see cref="LibUsbAx206DeviceDiscovery"/>).
 /// </summary>
 public sealed class LibUsbAx206Transport : IAx206Transport
 {
@@ -38,9 +38,9 @@ public sealed class LibUsbAx206Transport : IAx206Transport
         return LcdParametersResponse.Parse(response);
     }
 
-    public async Task SetPropertyAsync(Ax206Property property, ushort value, CancellationToken cancellationToken = default)
+    public async Task SetPropertyAsync(Ax206Property propertyToken, ushort value, CancellationToken cancellationToken = default)
     {
-        var cbw = Ax206CommandBuilder.SetProperty(property, value);
+        var cbw = Ax206CommandBuilder.SetProperty(propertyToken, value);
         await ExecuteAsync(cbw, dataOut: null, expectedInLength: 0, cancellationToken);
     }
 

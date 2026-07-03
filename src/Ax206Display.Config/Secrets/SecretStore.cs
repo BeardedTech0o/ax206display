@@ -1,5 +1,7 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Ax206Display.Config.Services;
 
 namespace Ax206Display.Config.Secrets;
 
@@ -9,6 +11,8 @@ namespace Ax206Display.Config.Secrets;
 /// </summary>
 public sealed class SecretStore
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+
     private readonly ISecretProtector _protector;
     private readonly string _filePath;
     private Dictionary<string, string> _encryptedByKey;
@@ -38,20 +42,35 @@ public sealed class SecretStore
         var directory = Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrEmpty(directory))
         {
-            Directory.CreateDirectory(directory);
+            SecureDirectory.EnsureExists(directory);
         }
 
         await using var stream = File.Create(_filePath);
-        await JsonSerializer.SerializeAsync(stream, _encryptedByKey, new JsonSerializerOptions { WriteIndented = true }, cancellationToken);
+        await JsonSerializer.SerializeAsync(stream, _encryptedByKey, SerializerOptions, cancellationToken);
     }
 
     public void SetSecret(string key, string plaintextValue)
     {
         var plaintextBytes = Encoding.UTF8.GetBytes(plaintextValue);
-        var encryptedBytes = _protector.Protect(plaintextBytes);
-        _encryptedByKey[key] = Convert.ToBase64String(encryptedBytes);
+        try
+        {
+            var encryptedBytes = _protector.Protect(plaintextBytes);
+            _encryptedByKey[key] = Convert.ToBase64String(encryptedBytes);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(plaintextBytes);
+        }
     }
 
+    /// <summary>
+    /// Decrypts and returns the secret as a <see cref="string"/>. Note that
+    /// .NET strings are immutable and can't be reliably wiped from memory once
+    /// created - keep the returned value in scope for as short a time as
+    /// possible (e.g. hand it straight to an HttpClient call, don't cache it).
+    /// The intermediate decrypted byte buffer this method allocates is zeroed
+    /// before returning.
+    /// </summary>
     public string? GetSecret(string key)
     {
         if (!_encryptedByKey.TryGetValue(key, out var encoded))
@@ -61,7 +80,14 @@ public sealed class SecretStore
 
         var encryptedBytes = Convert.FromBase64String(encoded);
         var plaintextBytes = _protector.Unprotect(encryptedBytes);
-        return Encoding.UTF8.GetString(plaintextBytes);
+        try
+        {
+            return Encoding.UTF8.GetString(plaintextBytes);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(plaintextBytes);
+        }
     }
 
     public void RemoveSecret(string key) => _encryptedByKey.Remove(key);

@@ -29,7 +29,7 @@ public class UniFiClientTests
     {
         var handler = new FakeHttpMessageHandler(request =>
         {
-            if (request.RequestUri!.AbsolutePath.EndsWith("/auth/login"))
+            if (request.RequestUri!.AbsolutePath.EndsWith("/auth/login", StringComparison.Ordinal))
             {
                 var loginResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
                 loginResponse.Headers.Add("X-CSRF-Token", "csrf-xyz");

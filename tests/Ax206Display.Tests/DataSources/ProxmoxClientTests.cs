@@ -37,7 +37,7 @@ public class ProxmoxClientTests
     {
         var handler = new FakeHttpMessageHandler(request =>
         {
-            if (request.RequestUri!.AbsolutePath.EndsWith("/access/ticket"))
+            if (request.RequestUri!.AbsolutePath.EndsWith("/access/ticket", StringComparison.Ordinal))
             {
                 const string ticketJson = """{ "data": { "ticket": "TICKET123", "CSRFPreventionToken": "CSRF456" } }""";
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(ticketJson, Encoding.UTF8, "application/json") };

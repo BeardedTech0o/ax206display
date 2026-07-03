@@ -7,8 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Pinned to the last version with a plain net8.0 target; 0.9.6+ moved to net8.0-windows7.0. -->
-    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.5" />
+    <PackageReference Include="LibreHardwareMonitorLib" />
   </ItemGroup>
 
   <ItemGroup>
