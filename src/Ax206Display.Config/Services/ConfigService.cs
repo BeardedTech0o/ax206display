@@ -41,7 +41,7 @@ public sealed class ConfigService
         var directory = Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrEmpty(directory))
         {
-            Directory.CreateDirectory(directory);
+            SecureDirectory.EnsureExists(directory);
         }
 
         var tempPath = _filePath + ".tmp";

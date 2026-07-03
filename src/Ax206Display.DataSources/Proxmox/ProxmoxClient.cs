@@ -11,9 +11,12 @@ namespace Ax206Display.DataSources.Proxmox;
 /// <remarks>
 /// The supplied <see cref="HttpClient"/> must have <see cref="HttpClient.BaseAddress"/>
 /// set to the node's API root (e.g. https://pve.example.com:8006). Proxmox
-/// commonly serves a self-signed certificate; enabling
-/// <see cref="Config.Models.IntegrationConfig.AllowInvalidTlsCertificate"/> is
-/// the caller's responsibility when constructing the handler.
+/// commonly serves a self-signed certificate - build the client via
+/// <see cref="Ax206Display.DataSources.Http.IntegrationHttpClientFactory"/>
+/// with <c>IntegrationConfig.PinnedCertificateSha256Thumbprint</c> set rather
+/// than disabling certificate validation outright. Pass
+/// <c>enableCookies: false</c> since this class manages the PVEAuthCookie
+/// header itself.
 /// </remarks>
 public sealed class ProxmoxClient : IProxmoxClient
 {

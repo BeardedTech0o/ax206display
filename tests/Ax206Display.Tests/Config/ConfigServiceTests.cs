@@ -71,5 +71,6 @@ public class ConfigServiceTests : IDisposable
     public void Dispose()
     {
         Directory.Delete(_tempDirectory, recursive: true);
+        GC.SuppressFinalize(this);
     }
 }

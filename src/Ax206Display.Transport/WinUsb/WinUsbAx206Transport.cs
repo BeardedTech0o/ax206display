@@ -66,9 +66,9 @@ public sealed class WinUsbAx206Transport : IAx206Transport
         return LcdParametersResponse.Parse(response);
     }
 
-    public Task SetPropertyAsync(Ax206Property property, ushort value, CancellationToken cancellationToken = default)
+    public Task SetPropertyAsync(Ax206Property propertyToken, ushort value, CancellationToken cancellationToken = default)
     {
-        var cbw = Ax206CommandBuilder.SetProperty(property, value);
+        var cbw = Ax206CommandBuilder.SetProperty(propertyToken, value);
         return ExecuteAsync(cbw, dataOut: null, expectedInLength: 0);
     }
 

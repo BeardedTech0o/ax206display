@@ -1,3 +1,4 @@
+using System.Globalization;
 using SkiaSharp;
 
 namespace Ax206Display.Rendering.Widgets;
@@ -27,7 +28,10 @@ public sealed class ClockWidget : IWidget
         using var font = new SKFont(SKTypeface.Default, Height * 0.6f);
         using var paint = new SKPaint { Color = _textColor, IsAntialias = true };
 
-        var text = context.Now.ToString(_timeFormat);
+        // Invariant culture so the display always renders Latin digits
+        // regardless of the host machine's locale - a small embedded LCD
+        // font may not have glyphs for other numbering systems.
+        var text = context.Now.ToString(_timeFormat, CultureInfo.InvariantCulture);
         var textWidth = font.MeasureText(text, paint);
 
         var x = (Width - textWidth) / 2f;

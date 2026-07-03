@@ -7,11 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SkiaSharp" Version="3.119.2" />
+    <PackageReference Include="SkiaSharp" />
     <!-- SkiaSharp's net6.0 dependency group (the nearest match for net8.0) only
          pulls in Windows/macOS native assets automatically, so Linux needs an
          explicit reference to render/test on Linux (dev machines and CI). -->
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.2" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
   </ItemGroup>
 
   <ItemGroup>

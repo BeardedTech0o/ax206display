@@ -60,5 +60,6 @@ public class SecretStoreTests : IDisposable
     public void Dispose()
     {
         Directory.Delete(_tempDirectory, recursive: true);
+        GC.SuppressFinalize(this);
     }
 }

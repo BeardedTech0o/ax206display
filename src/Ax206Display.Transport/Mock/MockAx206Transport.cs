@@ -34,9 +34,9 @@ public sealed class MockAx206Transport : IAx206Transport
         return Task.FromResult(new LcdParametersResponse(Width, Height, IsMarkerValid: true));
     }
 
-    public Task SetPropertyAsync(Ax206Property property, ushort value, CancellationToken cancellationToken = default)
+    public Task SetPropertyAsync(Ax206Property propertyToken, ushort value, CancellationToken cancellationToken = default)
     {
-        _properties[property] = value;
+        _properties[propertyToken] = value;
         return Task.CompletedTask;
     }
 

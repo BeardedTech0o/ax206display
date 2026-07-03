@@ -28,13 +28,13 @@ public static class Ax206CommandBuilder
     }
 
     /// <summary>Sets a device property (e.g. backlight brightness). No data phase.</summary>
-    public static CommandBlockWrapper SetProperty(Ax206Property property, ushort value)
+    public static CommandBlockWrapper SetProperty(Ax206Property propertyToken, ushort value)
     {
         var cdb = new byte[CdbLength];
         cdb[0] = Ax206CdbSelector.VendorOpcode;
         cdb[5] = Ax206CdbSelector.UserCommand;
         cdb[6] = (byte)Ax206UserCommand.SetProperty;
-        BinaryPrimitives.WriteUInt16LittleEndian(cdb.AsSpan(7, 2), (ushort)property);
+        BinaryPrimitives.WriteUInt16LittleEndian(cdb.AsSpan(7, 2), (ushort)propertyToken);
         BinaryPrimitives.WriteUInt16LittleEndian(cdb.AsSpan(9, 2), value);
 
         return new CommandBlockWrapper

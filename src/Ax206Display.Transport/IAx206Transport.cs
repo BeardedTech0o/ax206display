@@ -15,7 +15,7 @@ public interface IAx206Transport : IDisposable
 
     Task<LcdParametersResponse> GetLcdParametersAsync(CancellationToken cancellationToken = default);
 
-    Task SetPropertyAsync(Ax206Property property, ushort value, CancellationToken cancellationToken = default);
+    Task SetPropertyAsync(Ax206Property propertyToken, ushort value, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Uploads a rectangle of pixel data. <paramref name="rgb565BigEndianPixels"/>

@@ -9,10 +9,12 @@ namespace Ax206Display.DataSources.UniFi;
 /// calls to the Network application under /proxy/network/api/...
 /// </summary>
 /// <remarks>
-/// The supplied <see cref="HttpClient"/> must be built from a handler with
-/// cookies enabled (<c>UseCookies = true</c> with a <see cref="System.Net.CookieContainer"/>)
-/// and <see cref="HttpClient.BaseAddress"/> set to the console's root URL,
-/// since the session cookie set by login must flow to later requests.
+/// Build the supplied <see cref="HttpClient"/> via
+/// <see cref="Ax206Display.DataSources.Http.IntegrationHttpClientFactory"/>
+/// with <c>enableCookies: true</c>, since the session cookie set by login must
+/// flow automatically to later requests. UniFi OS consoles commonly serve a
+/// self-signed certificate - set <c>IntegrationConfig.PinnedCertificateSha256Thumbprint</c>
+/// rather than disabling certificate validation outright.
 /// </remarks>
 public sealed class UniFiClient : IUniFiClient
 {
