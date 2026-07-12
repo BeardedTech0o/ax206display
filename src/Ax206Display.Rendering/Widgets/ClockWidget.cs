@@ -34,6 +34,15 @@ public sealed class ClockWidget : IWidget
         var text = context.Now.ToString(_timeFormat, CultureInfo.InvariantCulture);
         var textWidth = font.MeasureText(text, paint);
 
+        // Height-derived sizing can overflow horizontally (e.g. "HH:mm:ss"
+        // on a wide-format string in a squat widget) - shrink to fit.
+        var maxTextWidth = Width * 0.95f;
+        if (textWidth > maxTextWidth)
+        {
+            font.Size *= maxTextWidth / textWidth;
+            textWidth = font.MeasureText(text, paint);
+        }
+
         var x = (Width - textWidth) / 2f;
         var y = Height / 2f - (font.Metrics.Ascent + font.Metrics.Descent) / 2f;
 
