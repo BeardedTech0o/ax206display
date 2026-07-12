@@ -73,6 +73,13 @@ jobs:
   windows-build:
     name: Windows (build WPF app)
     runs-on: windows-latest
+    # `if:` conditions can't reference the secrets context directly (GitHub
+    # rejects the whole workflow file at parse time if they do - this is what
+    # broke every single run, on every trigger, until this was found: see the
+    # "Sign Ax206Display.exe" step below). Routing it through job-level env:
+    # is the documented workaround; env vars ARE visible to step-level if:.
+    env:
+      HAS_SIGNING_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -101,7 +108,7 @@ jobs:
       # Authenticode signature and an RFC 3161 timestamp, and
       # AuthenticodeVerifier.EnforcementEnabled should be flipped to true.
       - name: Sign Ax206Display.exe
-        if: ${{ github.event_name != 'pull_request' && secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 != '' }}
+        if: ${{ github.event_name != 'pull_request' && env.HAS_SIGNING_CERT == 'true' }}
         shell: pwsh
         run: |
           $pfxPath = Join-Path $env:RUNNER_TEMP "ax206display-signing.pfx"
