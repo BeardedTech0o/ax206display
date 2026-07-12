@@ -18,7 +18,7 @@ minimal tray app that renders a live clock widget end-to-end through the real
 compositor. The widget designer, multi-device widget persistence, and the
 UniFi/Proxmox/weather widgets themselves are future milestones - the
 underlying data-source clients already exist and are unit tested, but aren't
-yet wired into a widget UI.
+yet wired into a widget UI. 
 
 ## Solution layout
 
