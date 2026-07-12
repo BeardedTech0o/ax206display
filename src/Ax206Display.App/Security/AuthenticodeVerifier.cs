@@ -24,8 +24,13 @@ public static class AuthenticodeVerifier
 {
     // static readonly rather than const: keeps this a runtime value instead
     // of a compile-time constant, so the compiler doesn't treat the enforced
-    // branch below as statically unreachable while this is false.
+    // branch below as statically unreachable while this is false. The
+    // explicit `= false` is kept for readability as an obvious "flip this
+    // when a signing cert exists" switch, even though CA1805 considers it
+    // redundant against bool's own default.
+#pragma warning disable CA1805
     public static readonly bool EnforcementEnabled = false;
+#pragma warning restore CA1805
 
     public static bool IsCurrentAssemblyTrusted()
     {
