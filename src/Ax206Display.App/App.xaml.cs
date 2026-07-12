@@ -1,4 +1,7 @@
 using System.Globalization;
+// Needed explicitly: the WindowsDesktop SDK removes System.IO from the
+// implicit-usings set that plain net8.0 projects get.
+using System.IO;
 using System.Windows;
 using Ax206Display.App.Composition;
 using Ax206Display.App.Security;
