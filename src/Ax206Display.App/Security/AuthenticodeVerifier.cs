@@ -22,7 +22,10 @@ namespace Ax206Display.App.Security;
 [SupportedOSPlatform("windows")]
 public static class AuthenticodeVerifier
 {
-    public const bool EnforcementEnabled = false;
+    // static readonly rather than const: keeps this a runtime value instead
+    // of a compile-time constant, so the compiler doesn't treat the enforced
+    // branch below as statically unreachable while this is false.
+    public static readonly bool EnforcementEnabled = false;
 
     public static bool IsCurrentAssemblyTrusted()
     {
@@ -63,7 +66,7 @@ public static class AuthenticodeVerifier
             // by the documented WinVerifyTrust usage pattern regardless of the
             // verify result above.
             data.dwStateAction = WtdStateActionClose;
-            WinVerifyTrust(IntPtr.Zero, ref actionId, ref data);
+            _ = WinVerifyTrust(IntPtr.Zero, ref actionId, ref data);
 
             return result == ErrorSuccess;
         }

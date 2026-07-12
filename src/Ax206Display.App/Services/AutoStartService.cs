@@ -8,17 +8,17 @@ namespace Ax206Display.App.Services;
 /// so no extra native COM interop surface is needed. The task runs with the
 /// highest available privileges, matching this app's own elevated manifest.
 /// </summary>
-public sealed class AutoStartService
+public static class AutoStartService
 {
     private const string TaskName = "Ax206Display";
 
-    public bool IsRegistered()
+    public static bool IsRegistered()
     {
         var result = RunSchtasks("/Query", "/TN", TaskName);
         return result.ExitCode == 0;
     }
 
-    public void Register()
+    public static void Register()
     {
         var exePath = Environment.ProcessPath
             ?? throw new InvalidOperationException("Could not determine the running executable's path.");
@@ -39,7 +39,7 @@ public sealed class AutoStartService
         }
     }
 
-    public void Unregister()
+    public static void Unregister()
     {
         var result = RunSchtasks("/Delete", "/F", "/TN", TaskName);
         if (result.ExitCode != 0 && !result.StandardError.Contains("cannot find", StringComparison.OrdinalIgnoreCase))

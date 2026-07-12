@@ -31,7 +31,6 @@ public static class HostFactory
         services.AddSingleton<ISystemMonitorSource, LibreHardwareMonitorSystemSource>();
         services.AddHttpClient<IWeatherSource, OpenMeteoWeatherSource>();
 
-        services.AddSingleton<AutoStartService>();
         services.AddSingleton<TrayIconHostedService>();
         services.AddHostedService(sp => sp.GetRequiredService<TrayIconHostedService>());
         services.AddTransient<WidgetDesignerWindow>();
