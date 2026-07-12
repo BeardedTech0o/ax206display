@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets us fire the workflow directly via the API/UI, independent of
+  # push/pull_request event delivery - useful for diagnosing whether Actions
+  # is working at all versus a specific event trigger not firing.
+  workflow_dispatch:
 
 env:
   DOTNET_NOLOGO: true
