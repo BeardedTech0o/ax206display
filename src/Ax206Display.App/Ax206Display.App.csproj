@@ -16,6 +16,11 @@
     <PackageReference Include="H.NotifyIcon.Wpf" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Microsoft.Extensions.Http" />
+    <!-- Direct reference (not just transitive via Hosting) so the
+         [LoggerMessage] source generator runs on this project's own code -
+         analyzers from a PackageReference don't reliably flow through
+         ProjectReferences to a consuming project's compilation. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="SkiaSharp.Views.WPF" />
   </ItemGroup>
 

@@ -33,6 +33,7 @@ public static class HostFactory
 
         services.AddSingleton<TrayIconHostedService>();
         services.AddHostedService(sp => sp.GetRequiredService<TrayIconHostedService>());
+        services.AddHostedService<DisplayManagerHostedService>();
         services.AddTransient<WidgetDesignerWindow>();
     }
 }
