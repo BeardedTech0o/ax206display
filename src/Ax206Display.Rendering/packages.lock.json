@@ -2,6 +2,15 @@
   "version": 2,
   "dependencies": {
     "net8.0": {
+      "Microsoft.Extensions.Logging.Abstractions": {
+        "type": "Direct",
+        "requested": "[8.0.2, )",
+        "resolved": "8.0.2",
+        "contentHash": "nroMDjS7hNBPtkZqVBbSiQaQjWRDxITI8Y7XnDs97rqG3EbzVTNLZQf7bIeUJcaHOV8bca47s1Uxq94+2oGdxA==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.2"
+        }
+      },
       "SkiaSharp": {
         "type": "Direct",
         "requested": "[3.119.2, )",
@@ -18,6 +27,11 @@
         "resolved": "3.119.2",
         "contentHash": "9WzxSyG/s9Id506j0Ht+Bi5ucOpWKPzd1XXr9TD4fuCafHHy2swRSlbZtC3IDQAsvCH63OerkDJajj43uSv5og=="
       },
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "8.0.2",
+        "contentHash": "3iE7UF7MQkCv1cxzCahz+Y/guQbTqieyxyaWKhrRO91itI9cOKO76OHeQDahqG4MmW5umr3CcCvGmK92lWNlbg=="
+      },
       "SkiaSharp.NativeAssets.macOS": {
         "type": "Transitive",
         "resolved": "3.119.2",
@@ -33,6 +47,23 @@
         "dependencies": {
           "System.Security.Cryptography.ProtectedData": "[8.0.0, )"
         }
+      },
+      "ax206display.protocol": {
+        "type": "Project"
+      },
+      "ax206display.transport": {
+        "type": "Project",
+        "dependencies": {
+          "Ax206Display.Protocol": "[1.0.0, )",
+          "LibUsbDotNet": "[3.0.224, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[8.0.2, )"
+        }
+      },
+      "LibUsbDotNet": {
+        "type": "CentralTransitive",
+        "requested": "[3.0.224, )",
+        "resolved": "3.0.224",
+        "contentHash": "yASyHZ2km43UdC0GalQjOEAIqAZkKcuOJa+RMp37XFmHcTFd7Yl3TI+2rkuZqM1b/vlWZbvlp/yStBpVLoTcaw=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "CentralTransitive",

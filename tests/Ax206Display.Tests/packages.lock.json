@@ -311,6 +311,8 @@
         "type": "Project",
         "dependencies": {
           "Ax206Display.Config": "[1.0.0, )",
+          "Ax206Display.Transport": "[1.0.0, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[8.0.2, )",
           "SkiaSharp": "[3.119.2, )",
           "SkiaSharp.NativeAssets.Linux": "[3.119.2, )"
         }

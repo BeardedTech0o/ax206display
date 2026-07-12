@@ -12,10 +12,12 @@
          pulls in Windows/macOS native assets automatically, so Linux needs an
          explicit reference to render/test on Linux (dev machines and CI). -->
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Ax206Display.Config\Ax206Display.Config.csproj" />
+    <ProjectReference Include="..\Ax206Display.Transport\Ax206Display.Transport.csproj" />
   </ItemGroup>
 
 </Project>
