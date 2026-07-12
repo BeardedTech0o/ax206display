@@ -7,7 +7,10 @@
 
   <ItemGroup>
     <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />
+    <!-- Must stay >= 8.0.2: Microsoft.Extensions.Hosting/.Http 8.0.1 both
+         transitively require Logging.Abstractions >= 8.0.2, and central
+         package management refuses to silently downgrade below that floor. -->
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
 
     <!-- Pinned to the last version with a plain net8.0 target; 0.9.6+ moved to net8.0-windows7.0. -->
     <PackageVersion Include="LibreHardwareMonitorLib" Version="0.9.5" />
