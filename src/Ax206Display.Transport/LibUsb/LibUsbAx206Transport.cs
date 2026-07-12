@@ -101,9 +101,8 @@ public sealed class LibUsbAx206Transport : IAx206Transport
     public void Dispose()
     {
         _ioLock.Dispose();
-        if (_device.IsOpen)
-        {
-            _device.Close();
-        }
+        // Dispose (not just Close): the transport owns the device wrapper
+        // outright - discovery hands it over and never disposes kept devices.
+        _device.Dispose();
     }
 }

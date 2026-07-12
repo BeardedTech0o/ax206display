@@ -25,16 +25,38 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
     {
         var discovered = new List<IAx206Transport>();
 
-        using var devices = _context.List();
-        foreach (var device in devices)
+        // Deliberately NOT disposed on the success path: disposing the
+        // UsbDeviceCollection disposes every device in it (per LibUsbDotNet's
+        // docs), which would close the handles behind the transports we are
+        // about to hand out. Devices we keep are owned by their transport;
+        // devices we reject are disposed individually below.
+        var devices = _context.List();
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var transport = await TryOpenAsDisplayAsync(device, cancellationToken);
-            if (transport is not null)
+            foreach (var device in devices)
             {
-                discovered.Add(transport);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var transport = await TryOpenAsDisplayAsync(device, cancellationToken);
+                if (transport is not null)
+                {
+                    discovered.Add(transport);
+                }
+                else
+                {
+                    SafeDispose(device);
+                }
             }
+        }
+        catch (Exception)
+        {
+            foreach (var transport in discovered)
+            {
+                transport.Dispose();
+            }
+
+            devices.Dispose();
+            throw;
         }
 
         return discovered;
@@ -101,6 +123,18 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
             {
                 device.Close();
             }
+        }
+        catch (Exception)
+        {
+            // Best-effort cleanup of a device we're discarding anyway.
+        }
+    }
+
+    private static void SafeDispose(IUsbDevice device)
+    {
+        try
+        {
+            device.Dispose();
         }
         catch (Exception)
         {
