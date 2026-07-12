@@ -17,7 +17,7 @@ namespace Ax206Display.App.Services;
 /// plugging one in produces an immediate visible result, and runs one
 /// <see cref="DeviceDisplayLoop"/> per display until the host stops.
 /// </summary>
-public sealed partial class DisplayManagerHostedService : IHostedService
+public sealed partial class DisplayManagerHostedService : IHostedService, IDisposable
 {
     private static readonly TimeSpan MaxFrameInterval = TimeSpan.FromSeconds(1);
 
@@ -116,6 +116,11 @@ public sealed partial class DisplayManagerHostedService : IHostedService
         {
             LogLoopFailed(ex, deviceId);
         }
+    }
+
+    public void Dispose()
+    {
+        _loopCancellation?.Dispose();
     }
 
     private static async Task<DeviceProfileConfig> ProvisionDefaultProfileAsync(IAx206Transport transport, CancellationToken cancellationToken)
