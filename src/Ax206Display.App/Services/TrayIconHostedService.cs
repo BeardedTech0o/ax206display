@@ -8,19 +8,17 @@ using Microsoft.Extensions.Hosting;
 namespace Ax206Display.App.Services;
 
 /// <summary>Owns the tray icon and its context menu for the lifetime of the app.</summary>
-public sealed class TrayIconHostedService : IHostedService
+public sealed class TrayIconHostedService : IHostedService, IDisposable
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IHostApplicationLifetime _lifetime;
-    private readonly AutoStartService _autoStartService;
     private TaskbarIcon? _trayIcon;
     private MenuItem? _startWithWindowsMenuItem;
 
-    public TrayIconHostedService(IServiceProvider serviceProvider, IHostApplicationLifetime lifetime, AutoStartService autoStartService)
+    public TrayIconHostedService(IServiceProvider serviceProvider, IHostApplicationLifetime lifetime)
     {
         _serviceProvider = serviceProvider;
         _lifetime = lifetime;
-        _autoStartService = autoStartService;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -59,7 +57,13 @@ public sealed class TrayIconHostedService : IHostedService
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _trayIcon?.Dispose();
+        _trayIcon = null;
         return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        _trayIcon?.Dispose();
     }
 
     private void OpenWidgetDesigner()
@@ -75,11 +79,11 @@ public sealed class TrayIconHostedService : IHostedService
         {
             if (_startWithWindowsMenuItem!.IsChecked)
             {
-                _autoStartService.Register();
+                AutoStartService.Register();
             }
             else
             {
-                _autoStartService.Unregister();
+                AutoStartService.Unregister();
             }
         }
         catch (Exception ex)
@@ -89,11 +93,11 @@ public sealed class TrayIconHostedService : IHostedService
         }
     }
 
-    private bool SafeIsRegistered()
+    private static bool SafeIsRegistered()
     {
         try
         {
-            return _autoStartService.IsRegistered();
+            return AutoStartService.IsRegistered();
         }
         catch (Exception)
         {
