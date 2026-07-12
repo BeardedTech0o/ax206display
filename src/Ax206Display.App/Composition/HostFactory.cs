@@ -1,3 +1,4 @@
+using Ax206Display.App.Logging;
 using Ax206Display.App.Services;
 using Ax206Display.App.Views;
 using Ax206Display.Config.Secrets;
@@ -8,6 +9,7 @@ using Ax206Display.Transport.Discovery;
 using Ax206Display.Transport.LibUsb;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Ax206Display.App.Composition;
 
@@ -17,6 +19,7 @@ public static class HostFactory
     public static IHost Create()
     {
         return Host.CreateDefaultBuilder()
+            .ConfigureLogging(logging => logging.AddProvider(new FileLoggerProvider(FileLoggerProvider.GetDefaultLogFilePath())))
             .ConfigureServices(ConfigureServices)
             .Build();
     }
