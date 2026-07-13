@@ -17,7 +17,7 @@ public sealed partial class DeviceDisplayLoop
     private static readonly IReadOnlyDictionary<string, object> EmptyData = new Dictionary<string, object>();
 
     private readonly IAx206Transport _transport;
-    private readonly IReadOnlyList<WidgetPlacement> _placements;
+    private IReadOnlyList<WidgetPlacement> _placements;
     private readonly TimeSpan _interval;
     private readonly IRenderDataProvider? _dataProvider;
     private readonly ILogger<DeviceDisplayLoop> _logger;
@@ -36,6 +36,16 @@ public sealed partial class DeviceDisplayLoop
         _logger = logger ?? NullLogger<DeviceDisplayLoop>.Instance;
     }
 
+    /// <summary>
+    /// Swaps in a new layout for this device without restarting the loop -
+    /// used when a saved config edit (e.g. from the Widget Designer) should
+    /// take effect live. Safe to call from any thread.
+    /// </summary>
+    public void UpdatePlacements(IReadOnlyList<WidgetPlacement> placements)
+    {
+        Volatile.Write(ref _placements, placements);
+    }
+
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         var parameters = await _transport.GetLcdParametersAsync(cancellationToken);
@@ -51,7 +61,7 @@ public sealed partial class DeviceDisplayLoop
                 Data = _dataProvider?.GetSnapshot() ?? EmptyData,
             };
 
-            using (var frame = compositor.ComposeFrame(_placements, context))
+            using (var frame = compositor.ComposeFrame(Volatile.Read(ref _placements), context))
             {
                 var pixels = FrameBufferExtractor.ToRgb565Bytes(frame, swapBytes: true);
                 await _transport.BlitAsync(0, 0, parameters.Width, parameters.Height, pixels, cancellationToken);

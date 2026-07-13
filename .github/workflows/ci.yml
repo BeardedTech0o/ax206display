@@ -88,15 +88,14 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      # Ax206Display.App's packages.lock.json can only be generated on
-      # Windows (it's the only project that needs a Windows restore), so it
-      # isn't committed yet - this restore auto-generates one per run rather
-      # than failing. Once a Windows dev runs `dotnet restore
-      # src/Ax206Display.App -p:RestorePackagesWithLockFile=true` and commits
-      # the resulting lock file, switch this to `--locked-mode` like the
-      # Linux job.
+      # --locked-mode fails the restore outright if the resolved dependency
+      # graph would differ from src/Ax206Display.App/packages.lock.json -
+      # same guarantee as the Linux job, now that a lock file for the WPF
+      # project exists (its NuGet graph resolves without the WindowsDesktop
+      # build targets, so it doesn't actually require a Windows host to
+      # generate - only `dotnet build`/`publish` do).
       - name: Restore
-        run: dotnet restore Ax206Display.sln
+        run: dotnet restore Ax206Display.sln --locked-mode
 
       - name: Build
         run: dotnet build Ax206Display.sln --configuration Release --no-restore

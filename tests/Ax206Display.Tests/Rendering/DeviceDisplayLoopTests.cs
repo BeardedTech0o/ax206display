@@ -85,6 +85,31 @@ public class DeviceDisplayLoopTests
         Assert.Equal(55.0, capture.LastData!["system.cpu.load"]);
     }
 
+    [Fact]
+    public async Task UpdatePlacements_TakesEffectWithoutRestartingTheLoop()
+    {
+        using var transport = new MockAx206Transport("mock-1", 20, 20);
+        var loop = new DeviceDisplayLoop(transport, placements: [], TimeSpan.FromMilliseconds(10));
+
+        using var cts = new CancellationTokenSource();
+        var runTask = loop.RunAsync(cts.Token);
+
+        await Task.Delay(50);
+        var countBeforeUpdate = transport.BlitCalls.Count;
+
+        var clock = new ClockWidget("clock-1", 20, 20);
+        loop.UpdatePlacements([new WidgetPlacement(clock, 0, 0, ZOrder: 0)]);
+
+        await Task.Delay(50);
+        cts.Cancel();
+        await runTask;
+
+        Assert.True(transport.BlitCalls.Count > countBeforeUpdate, "Expected more frames to be blitted after the update.");
+
+        var lastFramePixels = transport.BlitCalls[^1].Pixels;
+        Assert.Contains(lastFramePixels, b => b != 0);
+    }
+
     private sealed class DataCapturingWidget : IWidget
     {
         public DataCapturingWidget(string id, int width, int height)

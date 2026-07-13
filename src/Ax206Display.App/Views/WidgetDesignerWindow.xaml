@@ -3,15 +3,40 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:skia="clr-namespace:SkiaSharp.Views.WPF;assembly=SkiaSharp.Views.WPF"
         Title="Ax206Display - Widget Designer"
-        Height="420" Width="640"
+        Height="640" Width="960"
+        MinHeight="480" MinWidth="720"
         WindowStartupLocation="CenterScreen">
-    <DockPanel Margin="12">
-        <TextBlock DockPanel.Dock="Top"
-                   Margin="0,0,0,12"
-                   TextWrapping="Wrap"
-                   Text="M1 scaffold preview: this renders a clock widget end-to-end through the real compositor and pixel pipeline used to drive a physical display. The full form-based widget editor (add/remove/configure widgets per device) is a later milestone."/>
-        <Border DockPanel.Dock="Bottom" Background="Black" Height="320" Width="480" HorizontalAlignment="Center">
-            <skia:SKElement x:Name="PreviewElement" PaintSurface="OnPaintSurface"/>
+    <DockPanel Margin="10">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="Device:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <ComboBox x:Name="DeviceComboBox" Width="200" DisplayMemberPath="Name" SelectionChanged="OnDeviceSelectionChanged"/>
+
+            <Separator Margin="14,0" Width="1"/>
+
+            <TextBlock Text="Add widget:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <Button x:Name="AddClockButton" Content="Clock" Margin="0,0,4,0" Padding="10,4" Click="OnAddClockClick"/>
+            <Button x:Name="AddTextButton" Content="Text" Margin="0,0,4,0" Padding="10,4" Click="OnAddTextClick"/>
+            <Button x:Name="AddStatButton" Content="System Stat" Margin="0,0,14,0" Padding="10,4" Click="OnAddStatClick"/>
+
+            <Button x:Name="DeleteButton" Content="Delete Selected" Margin="0,0,14,0" Padding="10,4" Click="OnDeleteClick" IsEnabled="False"/>
+            <Button x:Name="SaveButton" Content="Save" Padding="16,4" FontWeight="Bold" Click="OnSaveClick" IsEnabled="False"/>
+
+            <TextBlock x:Name="StatusText" Margin="14,0,0,0" VerticalAlignment="Center" Foreground="Gray" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <Border DockPanel.Dock="Right" Width="240" Margin="10,0,0,0" BorderBrush="#CCCCCC" BorderThickness="1" Padding="10">
+            <StackPanel x:Name="PropertyPanel">
+                <TextBlock Text="Select a widget to edit its properties, or add a new one above." TextWrapping="Wrap" Foreground="Gray"/>
+            </StackPanel>
+        </Border>
+
+        <Border Background="#222222" BorderBrush="Black" BorderThickness="1">
+            <Viewbox Stretch="Uniform" Margin="16">
+                <Grid x:Name="DesignerRoot" Width="1" Height="1">
+                    <skia:SKElement x:Name="PreviewElement" PaintSurface="OnPaintSurface"/>
+                    <Canvas x:Name="OverlayCanvas" Background="Transparent"/>
+                </Grid>
+            </Viewbox>
         </Border>
     </DockPanel>
 </Window>

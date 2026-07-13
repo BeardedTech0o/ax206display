@@ -22,6 +22,7 @@ namespace Ax206Display.App.Services;
 public sealed partial class DisplayManagerHostedService : IHostedService, IDisposable
 {
     private static readonly TimeSpan MaxFrameInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan ConfigPollInterval = TimeSpan.FromSeconds(3);
 
     private readonly IAx206DeviceDiscovery _discovery;
     private readonly ConfigService _configService;
@@ -29,6 +30,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
     private readonly ILogger<DisplayManagerHostedService> _logger;
     private readonly List<IAx206Transport> _transports = [];
     private readonly List<Task> _loopTasks = [];
+    private readonly Dictionary<string, DeviceDisplayLoop> _loopsByDeviceId = [];
     private CancellationTokenSource? _loopCancellation;
 
     public DisplayManagerHostedService(
@@ -70,9 +72,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
                 LogAutoProvisioned(transport.DeviceId, profile.ScreenWidth, profile.ScreenHeight);
             }
 
-            var placements = profile.Widgets
-                .Select(w => new WidgetPlacement(WidgetFactory.Create(w), w.X, w.Y, w.ZOrder))
-                .ToList();
+            var placements = BuildPlacements(transport.DeviceId, profile.Widgets);
 
             var interval = TimeSpan.FromSeconds(1.0 / Math.Max(1, profile.TargetFps));
             if (interval > MaxFrameInterval)
@@ -81,6 +81,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
             }
 
             var loop = new DeviceDisplayLoop(transport, placements, interval, _dataProvider);
+            _loopsByDeviceId[transport.DeviceId] = loop;
             _loopTasks.Add(RunLoopSafelyAsync(loop, transport.DeviceId, _loopCancellation.Token));
         }
 
@@ -88,6 +89,10 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
         {
             await _configService.SaveAsync(config, cancellationToken);
         }
+
+        // So layout edits made in the Widget Designer (or by hand-editing
+        // config.json) reach the physical display without an app restart.
+        _loopTasks.Add(WatchConfigForChangesAsync(_loopCancellation.Token));
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -108,6 +113,59 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
         {
             transport.Dispose();
         }
+    }
+
+    private async Task WatchConfigForChangesAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(ConfigPollInterval, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            try
+            {
+                var config = await _configService.LoadAsync(cancellationToken);
+                foreach (var (deviceId, loop) in _loopsByDeviceId)
+                {
+                    var profile = config.Devices.FirstOrDefault(d => d.Id == deviceId);
+                    if (profile is null)
+                    {
+                        continue;
+                    }
+
+                    loop.UpdatePlacements(BuildPlacements(deviceId, profile.Widgets));
+                }
+            }
+            catch (Exception ex)
+            {
+                LogConfigReloadFailed(ex);
+            }
+        }
+    }
+
+    private List<WidgetPlacement> BuildPlacements(string deviceId, IEnumerable<WidgetConfig> widgets)
+    {
+        var placements = new List<WidgetPlacement>();
+
+        foreach (var widget in widgets)
+        {
+            try
+            {
+                placements.Add(new WidgetPlacement(WidgetFactory.Create(widget), widget.X, widget.Y, widget.ZOrder));
+            }
+            catch (Exception ex)
+            {
+                LogWidgetLoadFailed(ex, widget.Id, deviceId);
+            }
+        }
+
+        return placements;
     }
 
     private async Task RunLoopSafelyAsync(DeviceDisplayLoop loop, string deviceId, CancellationToken cancellationToken)
@@ -232,4 +290,10 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Display loop for {DeviceId} stopped unexpectedly.")]
     private partial void LogLoopFailed(Exception exception, string deviceId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to reload widget config; keeping the previous layout on screen.")]
+    private partial void LogConfigReloadFailed(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Skipping widget {WidgetId} for {DeviceId} - failed to build it from saved config.")]
+    private partial void LogWidgetLoadFailed(Exception exception, string widgetId, string deviceId);
 }
