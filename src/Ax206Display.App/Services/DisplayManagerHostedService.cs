@@ -1,5 +1,7 @@
+using System.Text.Json.Nodes;
 using Ax206Display.Config.Models;
 using Ax206Display.Config.Services;
+using Ax206Display.DataSources.SystemMonitor;
 using Ax206Display.Rendering.Playback;
 using Ax206Display.Rendering.Widgets;
 using Ax206Display.Transport;
@@ -23,15 +25,21 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
 
     private readonly IAx206DeviceDiscovery _discovery;
     private readonly ConfigService _configService;
+    private readonly IRenderDataProvider _dataProvider;
     private readonly ILogger<DisplayManagerHostedService> _logger;
     private readonly List<IAx206Transport> _transports = [];
     private readonly List<Task> _loopTasks = [];
     private CancellationTokenSource? _loopCancellation;
 
-    public DisplayManagerHostedService(IAx206DeviceDiscovery discovery, ConfigService configService, ILogger<DisplayManagerHostedService> logger)
+    public DisplayManagerHostedService(
+        IAx206DeviceDiscovery discovery,
+        ConfigService configService,
+        IRenderDataProvider dataProvider,
+        ILogger<DisplayManagerHostedService> logger)
     {
         _discovery = discovery;
         _configService = configService;
+        _dataProvider = dataProvider;
         _logger = logger;
     }
 
@@ -72,7 +80,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
                 interval = MaxFrameInterval;
             }
 
-            var loop = new DeviceDisplayLoop(transport, placements, interval);
+            var loop = new DeviceDisplayLoop(transport, placements, interval, _dataProvider);
             _loopTasks.Add(RunLoopSafelyAsync(loop, transport.DeviceId, _loopCancellation.Token));
         }
 
@@ -143,19 +151,77 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
             },
             ScreenWidth = parameters.Width,
             ScreenHeight = parameters.Height,
-            Widgets =
-            [
-                new WidgetConfig
-                {
-                    Id = "default-clock",
-                    Type = "clock",
-                    X = 0,
-                    Y = 0,
-                    Width = parameters.Width,
-                    Height = parameters.Height,
-                },
-            ],
+            Widgets = BuildDefaultLayout(parameters.Width, parameters.Height),
         };
+    }
+
+    /// <summary>
+    /// Clock across the top two thirds, live CPU load / CPU temp / RAM row
+    /// underneath. Stats that this machine can't report (e.g. temperature
+    /// without elevation) render as "--" rather than breaking the layout.
+    /// </summary>
+    private static List<WidgetConfig> BuildDefaultLayout(int width, int height)
+    {
+        var statRowHeight = height / 3;
+        var clockHeight = height - statRowHeight;
+        var statWidth = width / 3;
+
+        return
+        [
+            new WidgetConfig
+            {
+                Id = "default-clock",
+                Type = "clock",
+                X = 0,
+                Y = 0,
+                Width = width,
+                Height = clockHeight,
+            },
+            new WidgetConfig
+            {
+                Id = "default-cpu-load",
+                Type = "stat",
+                X = 0,
+                Y = clockHeight,
+                Width = statWidth,
+                Height = statRowHeight,
+                Settings = new JsonObject
+                {
+                    ["dataKey"] = SystemStatKeys.CpuLoadPercent,
+                    ["label"] = "CPU",
+                    ["unit"] = "%",
+                },
+            },
+            new WidgetConfig
+            {
+                Id = "default-cpu-temp",
+                Type = "stat",
+                X = statWidth,
+                Y = clockHeight,
+                Width = statWidth,
+                Height = statRowHeight,
+                Settings = new JsonObject
+                {
+                    ["dataKey"] = SystemStatKeys.CpuTemperatureCelsius,
+                    ["unit"] = "°C",
+                },
+            },
+            new WidgetConfig
+            {
+                Id = "default-memory",
+                Type = "stat",
+                X = statWidth * 2,
+                Y = clockHeight,
+                Width = width - (statWidth * 2),
+                Height = statRowHeight,
+                Settings = new JsonObject
+                {
+                    ["dataKey"] = SystemStatKeys.MemoryUsedPercent,
+                    ["label"] = "RAM",
+                    ["unit"] = "%",
+                },
+            },
+        ];
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "No AX206 displays found.")]

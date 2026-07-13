@@ -25,27 +25,10 @@ public sealed class ClockWidget : IWidget
 
     public void Render(SKCanvas canvas, WidgetRenderContext context)
     {
-        using var font = new SKFont(SKTypeface.Default, Height * 0.6f);
-        using var paint = new SKPaint { Color = _textColor, IsAntialias = true };
-
         // Invariant culture so the display always renders Latin digits
         // regardless of the host machine's locale - a small embedded LCD
         // font may not have glyphs for other numbering systems.
         var text = context.Now.ToString(_timeFormat, CultureInfo.InvariantCulture);
-        var textWidth = font.MeasureText(text, paint);
-
-        // Height-derived sizing can overflow horizontally (e.g. "HH:mm:ss"
-        // on a wide-format string in a squat widget) - shrink to fit.
-        var maxTextWidth = Width * 0.95f;
-        if (textWidth > maxTextWidth)
-        {
-            font.Size *= maxTextWidth / textWidth;
-            textWidth = font.MeasureText(text, paint);
-        }
-
-        var x = (Width - textWidth) / 2f;
-        var y = Height / 2f - (font.Metrics.Ascent + font.Metrics.Descent) / 2f;
-
-        canvas.DrawText(text, x, y, font, paint);
+        WidgetTextRenderer.DrawCentered(canvas, text, Width, Height, _textColor);
     }
 }

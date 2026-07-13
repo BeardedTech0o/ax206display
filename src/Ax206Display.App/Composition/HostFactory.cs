@@ -5,6 +5,7 @@ using Ax206Display.Config.Secrets;
 using Ax206Display.Config.Services;
 using Ax206Display.DataSources.SystemMonitor;
 using Ax206Display.DataSources.Weather;
+using Ax206Display.Rendering.Playback;
 using Ax206Display.Transport.Discovery;
 using Ax206Display.Transport.LibUsb;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,8 +35,12 @@ public static class HostFactory
         services.AddSingleton<ISystemMonitorSource, LibreHardwareMonitorSystemSource>();
         services.AddHttpClient<IWeatherSource, OpenMeteoWeatherSource>();
 
+        services.AddSingleton<RenderDataHub>();
+        services.AddSingleton<IRenderDataProvider>(sp => sp.GetRequiredService<RenderDataHub>());
+
         services.AddSingleton<TrayIconHostedService>();
         services.AddHostedService(sp => sp.GetRequiredService<TrayIconHostedService>());
+        services.AddHostedService<SystemMonitorPumpService>();
         services.AddHostedService<DisplayManagerHostedService>();
         services.AddTransient<WidgetDesignerWindow>();
     }

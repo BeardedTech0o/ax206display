@@ -63,4 +63,48 @@ public class DeviceDisplayLoopTests
 
         Assert.NotEmpty(transport.BlitCalls);
     }
+
+    [Fact]
+    public async Task RunAsync_PassesProviderSnapshotToWidgets()
+    {
+        using var transport = new MockAx206Transport("mock-1", 20, 20);
+        var hub = new RenderDataHub();
+        hub.Publish("system.cpu.load", 55.0);
+
+        var capture = new DataCapturingWidget("capture", 20, 20);
+        var placements = new[] { new WidgetPlacement(capture, 0, 0, ZOrder: 0) };
+        var loop = new DeviceDisplayLoop(transport, placements, TimeSpan.FromMilliseconds(10), hub);
+
+        using var cts = new CancellationTokenSource();
+        var runTask = loop.RunAsync(cts.Token);
+        await Task.Delay(50);
+        cts.Cancel();
+        await runTask;
+
+        Assert.NotNull(capture.LastData);
+        Assert.Equal(55.0, capture.LastData!["system.cpu.load"]);
+    }
+
+    private sealed class DataCapturingWidget : IWidget
+    {
+        public DataCapturingWidget(string id, int width, int height)
+        {
+            Id = id;
+            Width = width;
+            Height = height;
+        }
+
+        public string Id { get; }
+
+        public int Width { get; }
+
+        public int Height { get; }
+
+        public IReadOnlyDictionary<string, object>? LastData { get; private set; }
+
+        public void Render(SkiaSharp.SKCanvas canvas, WidgetRenderContext context)
+        {
+            LastData = context.Data;
+        }
+    }
 }

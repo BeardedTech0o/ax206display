@@ -14,20 +14,25 @@ namespace Ax206Display.Rendering.Playback;
 /// </summary>
 public sealed partial class DeviceDisplayLoop
 {
+    private static readonly IReadOnlyDictionary<string, object> EmptyData = new Dictionary<string, object>();
+
     private readonly IAx206Transport _transport;
     private readonly IReadOnlyList<WidgetPlacement> _placements;
     private readonly TimeSpan _interval;
+    private readonly IRenderDataProvider? _dataProvider;
     private readonly ILogger<DeviceDisplayLoop> _logger;
 
     public DeviceDisplayLoop(
         IAx206Transport transport,
         IReadOnlyList<WidgetPlacement> placements,
         TimeSpan interval,
+        IRenderDataProvider? dataProvider = null,
         ILogger<DeviceDisplayLoop>? logger = null)
     {
         _transport = transport;
         _placements = placements;
         _interval = interval;
+        _dataProvider = dataProvider;
         _logger = logger ?? NullLogger<DeviceDisplayLoop>.Instance;
     }
 
@@ -43,7 +48,7 @@ public sealed partial class DeviceDisplayLoop
             var context = new WidgetRenderContext
             {
                 Now = DateTimeOffset.Now,
-                Data = new Dictionary<string, object>(),
+                Data = _dataProvider?.GetSnapshot() ?? EmptyData,
             };
 
             using (var frame = compositor.ComposeFrame(_placements, context))

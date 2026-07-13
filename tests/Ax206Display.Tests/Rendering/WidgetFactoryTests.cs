@@ -42,6 +42,40 @@ public class WidgetFactoryTests
         Assert.Contains("weather", ex.Message);
     }
 
+    [Fact]
+    public void Create_TextWidget()
+    {
+        var config = MakeConfig("text");
+        config.Settings["text"] = "Hello";
+
+        var widget = WidgetFactory.Create(config);
+
+        Assert.IsType<TextWidget>(widget);
+    }
+
+    [Fact]
+    public void Create_StatWidget()
+    {
+        var config = MakeConfig("stat");
+        config.Settings["dataKey"] = "system.cpu.load";
+        config.Settings["label"] = "CPU";
+        config.Settings["unit"] = "%";
+        config.Settings["decimals"] = 1;
+
+        var widget = WidgetFactory.Create(config);
+
+        Assert.IsType<SystemStatWidget>(widget);
+    }
+
+    [Fact]
+    public void Create_StatWidgetWithoutDataKey_Throws()
+    {
+        var config = MakeConfig("stat");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => WidgetFactory.Create(config));
+        Assert.Contains("dataKey", ex.Message, StringComparison.Ordinal);
+    }
+
     private static WidgetConfig MakeConfig(string type) => new()
     {
         Id = "widget-1",
