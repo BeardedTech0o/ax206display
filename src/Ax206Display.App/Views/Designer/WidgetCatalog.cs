@@ -72,6 +72,18 @@ internal static class WidgetCatalog
         "Comic Sans MS",
     ];
 
+    internal sealed record FontSizeOption(string DisplayName, double Scale);
+
+    internal const double DefaultFontScale = 1.0;
+
+    internal static readonly IReadOnlyList<FontSizeOption> FontSizes =
+    [
+        new("Small", 0.75),
+        new("Default", DefaultFontScale),
+        new("Large", 1.25),
+        new("Extra Large", 1.5),
+    ];
+
     internal const string DefaultTimeFormat = "HH:mm:ss";
 
     internal static readonly IReadOnlyList<string> TimeFormats =

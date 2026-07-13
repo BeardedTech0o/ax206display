@@ -8,6 +8,7 @@ using Ax206Display.Transport;
 using Ax206Display.Transport.Discovery;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using SkiaSharp;
 
 namespace Ax206Display.App.Services;
 
@@ -31,6 +32,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
     private readonly List<IAx206Transport> _transports = [];
     private readonly List<Task> _loopTasks = [];
     private readonly Dictionary<string, DeviceDisplayLoop> _loopsByDeviceId = [];
+    private readonly Dictionary<string, string?> _backgroundImagePathsByDeviceId = [];
     private CancellationTokenSource? _loopCancellation;
 
     public DisplayManagerHostedService(
@@ -80,7 +82,10 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
                 interval = MaxFrameInterval;
             }
 
-            var loop = new DeviceDisplayLoop(transport, placements, interval, _dataProvider);
+            var backgroundImage = LoadBackgroundImage(transport.DeviceId, profile.BackgroundImagePath);
+            _backgroundImagePathsByDeviceId[transport.DeviceId] = profile.BackgroundImagePath;
+
+            var loop = new DeviceDisplayLoop(transport, placements, interval, _dataProvider, backgroundImage);
             _loopsByDeviceId[transport.DeviceId] = loop;
             _loopTasks.Add(RunLoopSafelyAsync(loop, transport.DeviceId, _loopCancellation.Token));
         }
@@ -140,12 +145,48 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
                     }
 
                     loop.UpdatePlacements(BuildPlacements(deviceId, profile.Widgets));
+
+                    // Only re-decode the image when its path actually
+                    // changed - re-reading and re-decoding an unchanged file
+                    // every poll would be wasted work on every tick forever.
+                    if (!_backgroundImagePathsByDeviceId.TryGetValue(deviceId, out var previousPath) || previousPath != profile.BackgroundImagePath)
+                    {
+                        loop.UpdateBackgroundImage(LoadBackgroundImage(deviceId, profile.BackgroundImagePath));
+                        _backgroundImagePathsByDeviceId[deviceId] = profile.BackgroundImagePath;
+                    }
                 }
             }
             catch (Exception ex)
             {
                 LogConfigReloadFailed(ex);
             }
+        }
+    }
+
+    private SKBitmap? LoadBackgroundImage(string deviceId, string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            // Decode returns null (rather than throwing) for a missing or
+            // corrupt/unrecognized file - either way, fall back to the
+            // plain background color instead of crashing the display loop.
+            var bitmap = SKBitmap.Decode(path);
+            if (bitmap is null)
+            {
+                LogBackgroundImageLoadFailed(null, deviceId, path);
+            }
+
+            return bitmap;
+        }
+        catch (Exception ex)
+        {
+            LogBackgroundImageLoadFailed(ex, deviceId, path);
+            return null;
         }
     }
 
@@ -296,4 +337,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Skipping widget {WidgetId} for {DeviceId} - failed to build it from saved config.")]
     private partial void LogWidgetLoadFailed(Exception exception, string widgetId, string deviceId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not load background image '{Path}' for {DeviceId}; using the plain background color instead.")]
+    private partial void LogBackgroundImageLoadFailed(Exception? exception, string deviceId, string path);
 }

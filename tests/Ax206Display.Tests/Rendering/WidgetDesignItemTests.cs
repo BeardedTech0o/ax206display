@@ -76,4 +76,38 @@ public class WidgetDesignItemTests
 
         Assert.Equal(3, item.GetIntSetting("decimals", 0));
     }
+
+    [Fact]
+    public void GetDoubleSetting_WhenAbsent_ReturnsDefault()
+    {
+        var item = new WidgetDesignItem { Id = "w1", Type = "clock" };
+
+        Assert.Equal(1.0, item.GetDoubleSetting("fontScale", 1.0));
+    }
+
+    [Fact]
+    public void GetDoubleSetting_AfterSet_ReturnsStoredValue()
+    {
+        var item = new WidgetDesignItem { Id = "w1", Type = "clock" };
+        item.SetDoubleSetting("fontScale", 1.25);
+
+        Assert.Equal(1.25, item.GetDoubleSetting("fontScale", 1.0));
+    }
+
+    [Fact]
+    public void GetBoolSetting_WhenAbsent_ReturnsDefault()
+    {
+        var item = new WidgetDesignItem { Id = "w1", Type = "clock" };
+
+        Assert.False(item.GetBoolSetting("bold", false));
+    }
+
+    [Fact]
+    public void GetBoolSetting_AfterSet_ReturnsStoredValue()
+    {
+        var item = new WidgetDesignItem { Id = "w1", Type = "clock" };
+        item.SetBoolSetting("bold", true);
+
+        Assert.True(item.GetBoolSetting("bold", false));
+    }
 }

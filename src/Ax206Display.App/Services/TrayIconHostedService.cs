@@ -11,14 +11,12 @@ namespace Ax206Display.App.Services;
 public sealed class TrayIconHostedService : IHostedService, IDisposable
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly IHostApplicationLifetime _lifetime;
     private TaskbarIcon? _trayIcon;
     private MenuItem? _startWithWindowsMenuItem;
 
-    public TrayIconHostedService(IServiceProvider serviceProvider, IHostApplicationLifetime lifetime)
+    public TrayIconHostedService(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
-        _lifetime = lifetime;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -30,7 +28,14 @@ public sealed class TrayIconHostedService : IHostedService, IDisposable
         _startWithWindowsMenuItem.Click += OnToggleStartWithWindows;
 
         var exitMenuItem = new MenuItem { Header = "Exit" };
-        exitMenuItem.Click += (_, _) => _lifetime.StopApplication();
+        // Not _lifetime.StopApplication(): that only stops the generic
+        // host's hosted services, it has no connection to the WPF
+        // Application's own lifetime. With ShutdownMode=OnExplicitShutdown
+        // (see App.xaml) nothing else ever calls Shutdown(), so the process
+        // lingers with no window and no tray icon until killed manually.
+        // Shutdown() closes any open windows and raises Exit, which drives
+        // App.OnExit's existing host.StopAsync()/Dispose().
+        exitMenuItem.Click += (_, _) => Application.Current.Shutdown();
 
         var contextMenu = new ContextMenu();
         contextMenu.Items.Add(designerMenuItem);
@@ -50,6 +55,11 @@ public sealed class TrayIconHostedService : IHostedService, IDisposable
         }
 
         _trayIcon.ForceCreate();
+
+        // A tray-only app with nothing visible on launch is easy to miss -
+        // open the designer immediately so there's always something on
+        // screen right after starting, instead of just a tray icon.
+        OpenWidgetDesigner();
 
         return Task.CompletedTask;
     }

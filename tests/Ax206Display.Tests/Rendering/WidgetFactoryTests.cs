@@ -79,6 +79,19 @@ public class WidgetFactoryTests
     }
 
     [Fact]
+    public void Create_ClockWithBoldItalicAndFontScaleSettings_UsesThem()
+    {
+        var config = MakeConfig("clock");
+        config.Settings["bold"] = true;
+        config.Settings["italic"] = true;
+        config.Settings["fontScale"] = 1.25;
+
+        var widget = WidgetFactory.Create(config);
+
+        Assert.IsType<ClockWidget>(widget);
+    }
+
+    [Fact]
     public void Create_StatWidgetWithoutDataKey_Throws()
     {
         var config = MakeConfig("stat");

@@ -22,11 +22,18 @@ public sealed class FrameCompositor
         _backgroundColor = backgroundColor ?? SKColors.Black;
     }
 
-    public SKBitmap ComposeFrame(IReadOnlyList<WidgetPlacement> placements, WidgetRenderContext context)
+    public SKBitmap ComposeFrame(IReadOnlyList<WidgetPlacement> placements, WidgetRenderContext context, SKBitmap? backgroundImage = null)
     {
         var bitmap = new SKBitmap(_canvasWidth, _canvasHeight, SKColorType.Rgb565, SKAlphaType.Opaque);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(_backgroundColor);
+
+        if (backgroundImage is not null)
+        {
+            // Stretched to fill, not aspect-preserving - simplest predictable
+            // behavior for a fixed-resolution embedded display.
+            canvas.DrawBitmap(backgroundImage, new SKRect(0, 0, _canvasWidth, _canvasHeight));
+        }
 
         foreach (var placement in placements.OrderBy(p => p.ZOrder))
         {

@@ -7,16 +7,16 @@ public sealed class ClockWidget : IWidget
 {
     private readonly SKColor _textColor;
     private readonly string _timeFormat;
-    private readonly string? _fontFamily;
+    private readonly WidgetFontStyle _fontStyle;
 
-    public ClockWidget(string id, int width, int height, string timeFormat = "HH:mm:ss", SKColor? textColor = null, string? fontFamily = null)
+    public ClockWidget(string id, int width, int height, string timeFormat = "HH:mm:ss", SKColor? textColor = null, WidgetFontStyle? fontStyle = null)
     {
         Id = id;
         Width = width;
         Height = height;
         _timeFormat = timeFormat;
         _textColor = textColor ?? SKColors.White;
-        _fontFamily = fontFamily;
+        _fontStyle = fontStyle ?? WidgetFontStyle.Default;
     }
 
     public string Id { get; }
@@ -31,6 +31,6 @@ public sealed class ClockWidget : IWidget
         // regardless of the host machine's locale - a small embedded LCD
         // font may not have glyphs for other numbering systems.
         var text = context.Now.ToString(_timeFormat, CultureInfo.InvariantCulture);
-        WidgetTextRenderer.DrawCentered(canvas, text, Width, Height, _textColor, _fontFamily);
+        WidgetTextRenderer.DrawCentered(canvas, text, Width, Height, _textColor, _fontStyle);
     }
 }

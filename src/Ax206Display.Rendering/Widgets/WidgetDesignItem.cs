@@ -74,4 +74,12 @@ public sealed class WidgetDesignItem
     public int GetIntSetting(string key, int defaultValue) => Settings[key]?.GetValue<int>() ?? defaultValue;
 
     public void SetIntSetting(string key, int value) => Settings[key] = value;
+
+    public double GetDoubleSetting(string key, double defaultValue) => Settings[key]?.GetValue<double>() ?? defaultValue;
+
+    public void SetDoubleSetting(string key, double value) => Settings[key] = value;
+
+    public bool GetBoolSetting(string key, bool defaultValue) => Settings[key]?.GetValue<bool>() ?? defaultValue;
+
+    public void SetBoolSetting(string key, bool value) => Settings[key] = value;
 }

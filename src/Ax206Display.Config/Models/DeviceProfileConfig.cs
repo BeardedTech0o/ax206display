@@ -16,5 +16,8 @@ public sealed record DeviceProfileConfig
 
     public int TargetFps { get; init; } = 1;
 
+    /// <summary>Absolute path to an image file drawn full-canvas beneath all widgets, or null for the solid background color.</summary>
+    public string? BackgroundImagePath { get; init; }
+
     public List<WidgetConfig> Widgets { get; init; } = [];
 }

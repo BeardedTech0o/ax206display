@@ -110,6 +110,29 @@ public class DeviceDisplayLoopTests
         Assert.Contains(lastFramePixels, b => b != 0);
     }
 
+    [Fact]
+    public async Task UpdateBackgroundImage_TakesEffectWithoutRestartingTheLoop()
+    {
+        using var transport = new MockAx206Transport("mock-1", 20, 20);
+        var loop = new DeviceDisplayLoop(transport, placements: [], TimeSpan.FromMilliseconds(10));
+
+        using var cts = new CancellationTokenSource();
+        var runTask = loop.RunAsync(cts.Token);
+
+        await Task.Delay(50);
+
+        using var background = new SkiaSharp.SKBitmap(4, 4, SkiaSharp.SKColorType.Rgb565, SkiaSharp.SKAlphaType.Opaque);
+        background.Erase(SkiaSharp.SKColors.White);
+        loop.UpdateBackgroundImage(background);
+
+        await Task.Delay(50);
+        cts.Cancel();
+        await runTask;
+
+        var lastFramePixels = transport.BlitCalls[^1].Pixels;
+        Assert.Contains(lastFramePixels, b => b != 0);
+    }
+
     private sealed class DataCapturingWidget : IWidget
     {
         public DataCapturingWidget(string id, int width, int height)

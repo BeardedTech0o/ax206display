@@ -24,6 +24,12 @@
             <TextBlock x:Name="StatusText" Margin="14,0,0,0" VerticalAlignment="Center" Foreground="Gray" TextWrapping="Wrap"/>
         </StackPanel>
 
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+            <Button x:Name="BackgroundButton" Content="Background..." Margin="0,0,4,0" Padding="10,4" Click="OnBackgroundClick"/>
+            <Button x:Name="ClearBackgroundButton" Content="Clear Background" Margin="0,0,14,0" Padding="10,4" Click="OnClearBackgroundClick"/>
+            <CheckBox x:Name="ShowGridCheckBox" Content="Show Grid" VerticalAlignment="Center" Checked="OnShowGridChanged" Unchecked="OnShowGridChanged"/>
+        </StackPanel>
+
         <Border DockPanel.Dock="Right" Width="240" Margin="10,0,0,0" BorderBrush="#CCCCCC" BorderThickness="1" Padding="10">
             <StackPanel x:Name="PropertyPanel">
                 <TextBlock Text="Select a widget to edit its properties, or add a new one above." TextWrapping="Wrap" Foreground="Gray"/>

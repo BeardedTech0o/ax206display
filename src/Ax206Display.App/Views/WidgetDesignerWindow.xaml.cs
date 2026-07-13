@@ -36,6 +36,9 @@ public partial class WidgetDesignerWindow : Window
     private FrameCompositor? _compositor;
     private TextBlock? _positionText;
     private bool _isLoadingDevice;
+    private SKBitmap? _backgroundImage;
+    private string? _backgroundImagePath;
+    private bool _showGrid;
 
     public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider)
     {
@@ -46,7 +49,11 @@ public partial class WidgetDesignerWindow : Window
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => PreviewElement.InvalidateVisual();
         _timer.Start();
-        Closed += (_, _) => _timer.Stop();
+        Closed += (_, _) =>
+        {
+            _timer.Stop();
+            _backgroundImage?.Dispose();
+        };
 
         Loaded += async (_, _) => await LoadConfigAsync();
     }
@@ -102,6 +109,8 @@ public partial class WidgetDesignerWindow : Window
         _compositor = new FrameCompositor(device.ScreenWidth, device.ScreenHeight);
         DesignerRoot.Width = device.ScreenWidth;
         DesignerRoot.Height = device.ScreenHeight;
+
+        LoadBackgroundImage(device.BackgroundImagePath);
 
         RebuildOverlays();
         ShowEmptyPropertyPanel();
@@ -200,6 +209,72 @@ public partial class WidgetDesignerWindow : Window
         PreviewElement.InvalidateVisual();
     }
 
+    private void LoadBackgroundImage(string? path)
+    {
+        _backgroundImage?.Dispose();
+        _backgroundImage = null;
+        _backgroundImagePath = path;
+
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        try
+        {
+            _backgroundImage = SKBitmap.Decode(path);
+            if (_backgroundImage is null)
+            {
+                SetStatus($"Could not read '{path}' as an image - background left blank.");
+            }
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not read '{path}': {ex.Message}");
+        }
+    }
+
+    private void OnBackgroundClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedDevice is null)
+        {
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose a background image",
+            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*",
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        LoadBackgroundImage(dialog.FileName);
+        SaveButton.IsEnabled = true;
+        PreviewElement.InvalidateVisual();
+    }
+
+    private void OnClearBackgroundClick(object sender, RoutedEventArgs e)
+    {
+        if (_backgroundImagePath is null)
+        {
+            return;
+        }
+
+        LoadBackgroundImage(null);
+        SaveButton.IsEnabled = true;
+        PreviewElement.InvalidateVisual();
+    }
+
+    private void OnShowGridChanged(object sender, RoutedEventArgs e)
+    {
+        _showGrid = ShowGridCheckBox.IsChecked == true;
+        PreviewElement.InvalidateVisual();
+    }
+
     private async void OnSaveClick(object sender, RoutedEventArgs e)
     {
         if (_selectedDevice is null)
@@ -218,7 +293,11 @@ public partial class WidgetDesignerWindow : Window
                 return;
             }
 
-            var updatedDevice = freshConfig.Devices[index] with { Widgets = [.. _items.Select(i => i.ToConfig())] };
+            var updatedDevice = freshConfig.Devices[index] with
+            {
+                Widgets = [.. _items.Select(i => i.ToConfig())],
+                BackgroundImagePath = _backgroundImagePath,
+            };
             var updatedDevices = new List<DeviceProfileConfig>(freshConfig.Devices);
             updatedDevices[index] = updatedDevice;
             var updatedConfig = freshConfig with { Devices = updatedDevices };
@@ -367,6 +446,45 @@ public partial class WidgetDesignerWindow : Window
             }
         };
         PropertyPanel.Children.Add(comboBox);
+
+        var stylePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+
+        var boldCheckBox = new CheckBox { Content = "Bold", IsChecked = item.GetBoolSetting("bold", false), Margin = new Thickness(0, 0, 12, 0) };
+        boldCheckBox.Checked += (_, _) => { item.SetBoolSetting("bold", true); OnItemChanged(); };
+        boldCheckBox.Unchecked += (_, _) => { item.SetBoolSetting("bold", false); OnItemChanged(); };
+        stylePanel.Children.Add(boldCheckBox);
+
+        var italicCheckBox = new CheckBox { Content = "Italic", IsChecked = item.GetBoolSetting("italic", false) };
+        italicCheckBox.Checked += (_, _) => { item.SetBoolSetting("italic", true); OnItemChanged(); };
+        italicCheckBox.Unchecked += (_, _) => { item.SetBoolSetting("italic", false); OnItemChanged(); };
+        stylePanel.Children.Add(italicCheckBox);
+
+        PropertyPanel.Children.Add(stylePanel);
+
+        PropertyPanel.Children.Add(new TextBlock { Text = "Size", Margin = new Thickness(0, 6, 0, 2) });
+
+        var currentScale = item.GetDoubleSetting("fontScale", WidgetCatalog.DefaultFontScale);
+        var currentSizeOption = WidgetCatalog.FontSizes.FirstOrDefault(s => Math.Abs(s.Scale - currentScale) < 0.001)
+            ?? WidgetCatalog.FontSizes.First(s => s.Scale == WidgetCatalog.DefaultFontScale);
+
+        var sizeComboBox = new ComboBox { ItemsSource = WidgetCatalog.FontSizes, DisplayMemberPath = "DisplayName", SelectedItem = currentSizeOption };
+        sizeComboBox.SelectionChanged += (_, _) =>
+        {
+            if (sizeComboBox.SelectedItem is WidgetCatalog.FontSizeOption option)
+            {
+                if (option.Scale == WidgetCatalog.DefaultFontScale)
+                {
+                    item.Settings.Remove("fontScale");
+                }
+                else
+                {
+                    item.SetDoubleSetting("fontScale", option.Scale);
+                }
+
+                OnItemChanged();
+            }
+        };
+        PropertyPanel.Children.Add(sizeComboBox);
     }
 
     private void AddStatFields(WidgetDesignItem item)
@@ -415,7 +533,7 @@ public partial class WidgetDesignerWindow : Window
         var canvas = e.Surface.Canvas;
         canvas.Clear(SKColors.Black);
 
-        if (_compositor is null || _items.Count == 0)
+        if (_compositor is null)
         {
             return;
         }
@@ -439,7 +557,27 @@ public partial class WidgetDesignerWindow : Window
         }
 
         var context = new WidgetRenderContext { Now = DateTimeOffset.Now, Data = _dataProvider.GetSnapshot() };
-        using var frame = _compositor.ComposeFrame(placements, context);
+        using var frame = _compositor.ComposeFrame(placements, context, _backgroundImage);
         canvas.DrawBitmap(frame, 0, 0);
+
+        if (_showGrid)
+        {
+            DrawGrid(canvas, (int)DesignerRoot.Width, (int)DesignerRoot.Height);
+        }
+    }
+
+    private static void DrawGrid(SKCanvas canvas, int width, int height, int spacing = 20)
+    {
+        using var paint = new SKPaint { Color = new SKColor(255, 255, 255, 90), StrokeWidth = 1, IsAntialias = false };
+
+        for (var x = 0; x <= width; x += spacing)
+        {
+            canvas.DrawLine(x, 0, x, height, paint);
+        }
+
+        for (var y = 0; y <= height; y += spacing)
+        {
+            canvas.DrawLine(0, y, width, y, paint);
+        }
     }
 }
