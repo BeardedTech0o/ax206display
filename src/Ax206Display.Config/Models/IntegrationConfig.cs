@@ -15,6 +15,9 @@ public sealed record IntegrationConfig
 
     public string? Username { get; init; }
 
+    /// <summary>Proxmox login realm (e.g. "pam", "pve") - unused by integrations that don't have the concept.</summary>
+    public string? Realm { get; init; }
+
     public string? SecretKey { get; init; }
 
     /// <summary>

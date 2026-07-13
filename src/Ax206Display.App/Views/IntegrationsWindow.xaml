@@ -1,0 +1,61 @@
+<Window x:Class="Ax206Display.App.Views.IntegrationsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Ax206Display - Integrations"
+        Height="680" Width="520"
+        MinHeight="560" MinWidth="480"
+        WindowStartupLocation="CenterScreen">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12">
+        <StackPanel>
+            <TextBlock Text="Proxmox VE" FontWeight="Bold" FontSize="16" Margin="0,0,0,8"/>
+            <TextBlock Text="Shows live CPU/memory for VMs and containers as a &quot;System Stat&quot; widget reading in the Widget Designer." TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,10"/>
+
+            <TextBlock Text="Host URL (e.g. https://proxmox.local:8006)" Margin="0,0,0,2"/>
+            <TextBox x:Name="ProxmoxUrlTextBox" Margin="0,0,0,8"/>
+
+            <TextBlock Text="Username" Margin="0,0,0,2"/>
+            <TextBox x:Name="ProxmoxUsernameTextBox" Margin="0,0,0,8"/>
+
+            <TextBlock Text="Realm" Margin="0,0,0,2"/>
+            <TextBox x:Name="ProxmoxRealmTextBox" Text="pam" Margin="0,0,0,8"/>
+
+            <TextBlock Text="Password (leave blank to keep the saved one)" Margin="0,0,0,2"/>
+            <PasswordBox x:Name="ProxmoxPasswordBox" Margin="0,0,0,8"/>
+
+            <TextBlock Text="Pinned certificate thumbprint (optional - for a self-signed certificate)" Margin="0,0,0,2"/>
+            <DockPanel Margin="0,0,0,8">
+                <Button DockPanel.Dock="Right" Content="Detect" Padding="10,4" Margin="6,0,0,0" Click="OnProxmoxDetectCertificateClick"/>
+                <TextBox x:Name="ProxmoxThumbprintTextBox"/>
+            </DockPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <Button Content="Test &amp; Save" Padding="12,4" Margin="0,0,8,0" Click="OnProxmoxTestAndSaveClick"/>
+                <Button Content="Remove" Padding="12,4" Click="OnProxmoxRemoveClick"/>
+            </StackPanel>
+            <TextBlock x:Name="ProxmoxStatusText" TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,20"/>
+
+            <Separator Margin="0,0,0,20"/>
+
+            <TextBlock Text="Pi-hole" FontWeight="Bold" FontSize="16" Margin="0,0,0,8"/>
+            <TextBlock Text="Shows ads blocked today, DNS queries today, and block percentage as a &quot;System Stat&quot; widget reading." TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,10"/>
+
+            <TextBlock Text="Host URL (e.g. http://pi.hole or http://192.168.1.10)" Margin="0,0,0,2"/>
+            <TextBox x:Name="PiHoleUrlTextBox" Margin="0,0,0,8"/>
+
+            <TextBlock Text="API token (Settings -&gt; API / Web interface -&gt; Show API token, leave blank to keep the saved one)" TextWrapping="Wrap" Margin="0,0,0,2"/>
+            <PasswordBox x:Name="PiHoleTokenBox" Margin="0,0,0,8"/>
+
+            <TextBlock Text="Pinned certificate thumbprint (optional - only if using HTTPS with a self-signed certificate)" TextWrapping="Wrap" Margin="0,0,0,2"/>
+            <DockPanel Margin="0,0,0,8">
+                <Button DockPanel.Dock="Right" Content="Detect" Padding="10,4" Margin="6,0,0,0" Click="OnPiHoleDetectCertificateClick"/>
+                <TextBox x:Name="PiHoleThumbprintTextBox"/>
+            </DockPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <Button Content="Test &amp; Save" Padding="12,4" Margin="0,0,8,0" Click="OnPiHoleTestAndSaveClick"/>
+                <Button Content="Remove" Padding="12,4" Click="OnPiHoleRemoveClick"/>
+            </StackPanel>
+            <TextBlock x:Name="PiHoleStatusText" TextWrapping="Wrap" Foreground="Gray"/>
+        </StackPanel>
+    </ScrollViewer>
+</Window>

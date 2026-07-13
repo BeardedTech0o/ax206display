@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using Ax206Display.App.Views.Designer;
 using Ax206Display.Config.Models;
 using Ax206Display.Config.Services;
+using Ax206Display.DataSources.Proxmox;
 using Ax206Display.Rendering.Compositing;
 using Ax206Display.Rendering.Playback;
 using Ax206Display.Rendering.Widgets;
@@ -25,6 +26,7 @@ public partial class WidgetDesignerWindow : Window
 {
     private readonly ConfigService _configService;
     private readonly IRenderDataProvider _dataProvider;
+    private readonly ProxmoxGuestDirectory _proxmoxGuestDirectory;
     private readonly DispatcherTimer _timer;
 
     private readonly List<WidgetDesignItem> _items = [];
@@ -40,11 +42,12 @@ public partial class WidgetDesignerWindow : Window
     private string? _backgroundImagePath;
     private bool _showGrid;
 
-    public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider)
+    public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider, ProxmoxGuestDirectory proxmoxGuestDirectory)
     {
         InitializeComponent();
         _configService = configService;
         _dataProvider = dataProvider;
+        _proxmoxGuestDirectory = proxmoxGuestDirectory;
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => PreviewElement.InvalidateVisual();
@@ -487,13 +490,41 @@ public partial class WidgetDesignerWindow : Window
         PropertyPanel.Children.Add(sizeComboBox);
     }
 
+    /// <summary>
+    /// The fixed system/network keys plus one entry per currently-known
+    /// Proxmox guest (CPU and memory) - read from ProxmoxGuestDirectory, a
+    /// plain in-memory snapshot the pump service keeps current, so opening
+    /// this panel never makes a network call of its own.
+    /// </summary>
+    private List<WidgetCatalog.StatKeyDescriptor> BuildAvailableStatKeys()
+    {
+        var keys = new List<WidgetCatalog.StatKeyDescriptor>(WidgetCatalog.StatKeys);
+
+        foreach (var guest in _proxmoxGuestDirectory.GetSnapshot())
+        {
+            keys.Add(new WidgetCatalog.StatKeyDescriptor(
+                ProxmoxGuestKeys.CpuUsedPercent(guest.VmId),
+                $"Proxmox: {guest.Name} CPU",
+                guest.Name,
+                "%"));
+            keys.Add(new WidgetCatalog.StatKeyDescriptor(
+                ProxmoxGuestKeys.MemoryUsedPercent(guest.VmId),
+                $"Proxmox: {guest.Name} Memory",
+                guest.Name,
+                "%"));
+        }
+
+        return keys;
+    }
+
     private void AddStatFields(WidgetDesignItem item)
     {
+        var availableKeys = BuildAvailableStatKeys();
         var currentKey = item.GetSetting("dataKey");
-        var currentDescriptor = WidgetCatalog.StatKeys.FirstOrDefault(k => k.Key == currentKey) ?? WidgetCatalog.StatKeys[0];
+        var currentDescriptor = availableKeys.FirstOrDefault(k => k.Key == currentKey) ?? availableKeys[0];
 
         PropertyPanel.Children.Add(new TextBlock { Text = "Reading", Margin = new Thickness(0, 6, 0, 2) });
-        var keyComboBox = new ComboBox { ItemsSource = WidgetCatalog.StatKeys, DisplayMemberPath = "DisplayName", SelectedItem = currentDescriptor };
+        var keyComboBox = new ComboBox { ItemsSource = availableKeys, DisplayMemberPath = "DisplayName", SelectedItem = currentDescriptor };
         keyComboBox.SelectionChanged += (_, _) =>
         {
             if (keyComboBox.SelectedItem is WidgetCatalog.StatKeyDescriptor descriptor)

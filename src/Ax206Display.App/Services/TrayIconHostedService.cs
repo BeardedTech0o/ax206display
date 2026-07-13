@@ -24,6 +24,9 @@ public sealed class TrayIconHostedService : IHostedService, IDisposable
         var designerMenuItem = new MenuItem { Header = "Widget Designer..." };
         designerMenuItem.Click += (_, _) => OpenWidgetDesigner();
 
+        var integrationsMenuItem = new MenuItem { Header = "Integrations..." };
+        integrationsMenuItem.Click += (_, _) => OpenIntegrations();
+
         _startWithWindowsMenuItem = new MenuItem { Header = "Start with Windows", IsCheckable = true, IsChecked = SafeIsRegistered() };
         _startWithWindowsMenuItem.Click += OnToggleStartWithWindows;
 
@@ -39,6 +42,7 @@ public sealed class TrayIconHostedService : IHostedService, IDisposable
 
         var contextMenu = new ContextMenu();
         contextMenu.Items.Add(designerMenuItem);
+        contextMenu.Items.Add(integrationsMenuItem);
         contextMenu.Items.Add(_startWithWindowsMenuItem);
         contextMenu.Items.Add(new Separator());
         contextMenu.Items.Add(exitMenuItem);
@@ -79,6 +83,13 @@ public sealed class TrayIconHostedService : IHostedService, IDisposable
     private void OpenWidgetDesigner()
     {
         var window = _serviceProvider.GetRequiredService<WidgetDesignerWindow>();
+        window.Show();
+        window.Activate();
+    }
+
+    private void OpenIntegrations()
+    {
+        var window = _serviceProvider.GetRequiredService<IntegrationsWindow>();
         window.Show();
         window.Activate();
     }

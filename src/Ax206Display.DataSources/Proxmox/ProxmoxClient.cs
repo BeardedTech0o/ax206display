@@ -75,6 +75,45 @@ public sealed class ProxmoxClient : IProxmoxClient
             .ToList();
     }
 
+    public async Task<IReadOnlyList<ProxmoxGuestStatus>> GetGuestStatusesAsync(CancellationToken cancellationToken = default)
+    {
+        var nodes = await GetNodeStatusesAsync(cancellationToken);
+        var guests = new List<ProxmoxGuestStatus>();
+
+        foreach (var node in nodes)
+        {
+            guests.AddRange(await GetGuestsForNodeAsync(node.Node, "qemu", cancellationToken));
+            guests.AddRange(await GetGuestsForNodeAsync(node.Node, "lxc", cancellationToken));
+        }
+
+        return guests;
+    }
+
+    private async Task<IReadOnlyList<ProxmoxGuestStatus>> GetGuestsForNodeAsync(string node, string guestType, CancellationToken cancellationToken)
+    {
+        using var request = CreateAuthenticatedRequest(HttpMethod.Get, $"/api2/json/nodes/{node}/{guestType}");
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var body = await response.Content.ReadFromJsonAsync<GuestsResponse>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException($"Proxmox {guestType} endpoint for node '{node}' returned an empty response body.");
+
+        return body.Data
+            .Select(g => new ProxmoxGuestStatus
+            {
+                Node = node,
+                VmId = g.VmId,
+                Name = g.Name,
+                Type = guestType,
+                Status = g.Status,
+                CpuUsageFraction = g.Cpu,
+                MemoryUsedBytes = g.Mem,
+                MemoryTotalBytes = g.MaxMem,
+            })
+            .ToList();
+    }
+
     private HttpRequestMessage CreateAuthenticatedRequest(HttpMethod method, string path)
     {
         if (_ticket is null)
@@ -132,5 +171,32 @@ public sealed class ProxmoxClient : IProxmoxClient
 
         [JsonPropertyName("uptime")]
         public long Uptime { get; set; }
+    }
+
+    private sealed class GuestsResponse
+    {
+        [JsonPropertyName("data")]
+        public List<GuestEntry> Data { get; set; } = [];
+    }
+
+    private sealed class GuestEntry
+    {
+        [JsonPropertyName("vmid")]
+        public int VmId { get; set; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = string.Empty;
+
+        [JsonPropertyName("cpu")]
+        public double Cpu { get; set; }
+
+        [JsonPropertyName("mem")]
+        public long Mem { get; set; }
+
+        [JsonPropertyName("maxmem")]
+        public long MaxMem { get; set; }
     }
 }
