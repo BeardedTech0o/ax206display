@@ -35,7 +35,6 @@ public partial class WidgetDesignerWindow : Window
     private WidgetDesignItem? _selectedItem;
     private FrameCompositor? _compositor;
     private TextBlock? _positionText;
-    private bool _isDirty;
     private bool _isLoadingDevice;
 
     public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider)
@@ -95,7 +94,6 @@ public partial class WidgetDesignerWindow : Window
 
         _selectedDevice = device;
         _selectedItem = null;
-        _isDirty = false;
         SaveButton.IsEnabled = false;
 
         _items.Clear();
@@ -153,7 +151,6 @@ public partial class WidgetDesignerWindow : Window
             return;
         }
 
-        _isDirty = true;
         SaveButton.IsEnabled = true;
         PreviewElement.InvalidateVisual();
 
@@ -181,7 +178,6 @@ public partial class WidgetDesignerWindow : Window
         _items.Add(item);
         AddOverlayFor(item);
 
-        _isDirty = true;
         SaveButton.IsEnabled = true;
         SelectItem(item);
         PreviewElement.InvalidateVisual();
@@ -199,7 +195,6 @@ public partial class WidgetDesignerWindow : Window
         _items.Remove(_selectedItem);
         _selectedItem = null;
 
-        _isDirty = true;
         SaveButton.IsEnabled = true;
         ShowEmptyPropertyPanel();
         PreviewElement.InvalidateVisual();
@@ -232,7 +227,6 @@ public partial class WidgetDesignerWindow : Window
 
             _config = updatedConfig;
             _selectedDevice = updatedDevice;
-            _isDirty = false;
             SetStatus("Saved. The display picks up changes within a few seconds.");
         }
         catch (Exception ex)
