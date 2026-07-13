@@ -19,6 +19,7 @@ public sealed class SystemStatWidget : IWidget
     private readonly string _unit;
     private readonly int _decimals;
     private readonly SKColor _textColor;
+    private readonly string? _fontFamily;
 
     public SystemStatWidget(
         string id,
@@ -28,7 +29,8 @@ public sealed class SystemStatWidget : IWidget
         string label = "",
         string unit = "",
         int decimals = 0,
-        SKColor? textColor = null)
+        SKColor? textColor = null,
+        string? fontFamily = null)
     {
         Id = id;
         Width = width;
@@ -38,6 +40,7 @@ public sealed class SystemStatWidget : IWidget
         _unit = unit;
         _decimals = Math.Clamp(decimals, 0, 3);
         _textColor = textColor ?? SKColors.White;
+        _fontFamily = fontFamily;
     }
 
     public string Id { get; }
@@ -58,7 +61,7 @@ public sealed class SystemStatWidget : IWidget
             ? valueText + _unit
             : _label + " " + valueText + _unit;
 
-        WidgetTextRenderer.DrawCentered(canvas, text, Width, Height, _textColor);
+        WidgetTextRenderer.DrawCentered(canvas, text, Width, Height, _textColor, _fontFamily);
     }
 
     private static double? AsDouble(WidgetRenderContext context, string key)

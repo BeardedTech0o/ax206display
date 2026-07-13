@@ -12,23 +12,38 @@ internal static class WidgetTextRenderer
     private const float HeightFraction = 0.6f;
     private const float MaxWidthFraction = 0.95f;
 
-    internal static void DrawCentered(SKCanvas canvas, string text, int width, int height, SKColor color)
+    internal static void DrawCentered(SKCanvas canvas, string text, int width, int height, SKColor color, string? fontFamily = null)
     {
-        using var font = new SKFont(SKTypeface.Default, height * HeightFraction);
-        using var paint = new SKPaint { Color = color, IsAntialias = true };
+        // SKTypeface.Default is a shared static instance - only a typeface we
+        // create ourselves (a custom family lookup) is ours to dispose.
+        var isCustomFont = !string.IsNullOrEmpty(fontFamily);
+        var typeface = isCustomFont ? SKTypeface.FromFamilyName(fontFamily) : SKTypeface.Default;
 
-        var textWidth = font.MeasureText(text, paint);
-
-        var maxTextWidth = width * MaxWidthFraction;
-        if (textWidth > maxTextWidth)
+        try
         {
-            font.Size *= maxTextWidth / textWidth;
-            textWidth = font.MeasureText(text, paint);
+            using var font = new SKFont(typeface, height * HeightFraction);
+            using var paint = new SKPaint { Color = color, IsAntialias = true };
+
+            var textWidth = font.MeasureText(text, paint);
+
+            var maxTextWidth = width * MaxWidthFraction;
+            if (textWidth > maxTextWidth)
+            {
+                font.Size *= maxTextWidth / textWidth;
+                textWidth = font.MeasureText(text, paint);
+            }
+
+            var x = (width - textWidth) / 2f;
+            var y = height / 2f - (font.Metrics.Ascent + font.Metrics.Descent) / 2f;
+
+            canvas.DrawText(text, x, y, font, paint);
         }
-
-        var x = (width - textWidth) / 2f;
-        var y = height / 2f - (font.Metrics.Ascent + font.Metrics.Descent) / 2f;
-
-        canvas.DrawText(text, x, y, font, paint);
+        finally
+        {
+            if (isCustomFont)
+            {
+                typeface.Dispose();
+            }
+        }
     }
 }

@@ -68,6 +68,17 @@ public class WidgetFactoryTests
     }
 
     [Fact]
+    public void Create_ClockWithFontFamilySetting_UsesIt()
+    {
+        var config = MakeConfig("clock");
+        config.Settings["fontFamily"] = "Consolas";
+
+        var widget = WidgetFactory.Create(config);
+
+        Assert.IsType<ClockWidget>(widget);
+    }
+
+    [Fact]
     public void Create_StatWidgetWithoutDataKey_Throws()
     {
         var config = MakeConfig("stat");

@@ -83,4 +83,27 @@ public class ClockWidgetTests
         Assert.True(anyTextPixel, "Expected the clock text to paint at least one non-background pixel.");
         Assert.False(edgeColumnsTouched, "Expected the shrunk-to-fit clock text to stay clear of the widget's left/right edges.");
     }
+
+    [Fact]
+    public void Render_WithUnknownFontFamily_FallsBackInsteadOfThrowing()
+    {
+        // SkiaSharp's font-family lookup substitutes a fallback typeface for
+        // a name it doesn't recognize rather than throwing or returning
+        // null - a saved config referencing a font that isn't installed on
+        // this machine must still render, not crash the display loop.
+        var widget = new ClockWidget("clock", 200, 60, fontFamily: "Definitely Not A Real Font 12345");
+        using var bitmap = new SKBitmap(200, 60, SKColorType.Rgb565, SKAlphaType.Opaque);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Black);
+
+        var context = new WidgetRenderContext
+        {
+            Now = new DateTimeOffset(2026, 7, 3, 12, 34, 56, TimeSpan.Zero),
+            Data = new Dictionary<string, object>(),
+        };
+
+        var exception = Record.Exception(() => widget.Render(canvas, context));
+
+        Assert.Null(exception);
+    }
 }

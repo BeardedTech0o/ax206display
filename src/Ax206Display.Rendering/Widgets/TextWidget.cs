@@ -7,14 +7,16 @@ public sealed class TextWidget : IWidget
 {
     private readonly string _text;
     private readonly SKColor _textColor;
+    private readonly string? _fontFamily;
 
-    public TextWidget(string id, int width, int height, string text, SKColor? textColor = null)
+    public TextWidget(string id, int width, int height, string text, SKColor? textColor = null, string? fontFamily = null)
     {
         Id = id;
         Width = width;
         Height = height;
         _text = text;
         _textColor = textColor ?? SKColors.White;
+        _fontFamily = fontFamily;
     }
 
     public string Id { get; }
@@ -25,6 +27,6 @@ public sealed class TextWidget : IWidget
 
     public void Render(SKCanvas canvas, WidgetRenderContext context)
     {
-        WidgetTextRenderer.DrawCentered(canvas, _text, Width, Height, _textColor);
+        WidgetTextRenderer.DrawCentered(canvas, _text, Width, Height, _textColor, _fontFamily);
     }
 }

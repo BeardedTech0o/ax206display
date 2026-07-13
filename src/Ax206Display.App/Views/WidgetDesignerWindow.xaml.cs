@@ -275,6 +275,7 @@ public partial class WidgetDesignerWindow : Window
                     OnItemChanged();
                 });
                 AddColorField(item);
+                AddFontField(item);
                 break;
 
             case "text":
@@ -284,11 +285,13 @@ public partial class WidgetDesignerWindow : Window
                     OnItemChanged();
                 });
                 AddColorField(item);
+                AddFontField(item);
                 break;
 
             case "stat":
                 AddStatFields(item);
                 AddColorField(item);
+                AddFontField(item);
                 break;
         }
     }
@@ -337,6 +340,29 @@ public partial class WidgetDesignerWindow : Window
             if (comboBox.SelectedItem is WidgetCatalog.ColorSwatch swatch)
             {
                 item.SetSetting("textColor", swatch.Hex);
+                OnItemChanged();
+            }
+        };
+        PropertyPanel.Children.Add(comboBox);
+    }
+
+    private void AddFontField(WidgetDesignItem item)
+    {
+        PropertyPanel.Children.Add(new TextBlock { Text = "Font", Margin = new Thickness(0, 6, 0, 2) });
+
+        var currentFamily = item.GetSetting("fontFamily");
+        var currentSelection = string.IsNullOrEmpty(currentFamily) ? WidgetCatalog.DefaultFontLabel : currentFamily;
+        if (!WidgetCatalog.FontFamilies.Contains(currentSelection))
+        {
+            currentSelection = WidgetCatalog.DefaultFontLabel;
+        }
+
+        var comboBox = new ComboBox { ItemsSource = WidgetCatalog.FontFamilies, SelectedItem = currentSelection };
+        comboBox.SelectionChanged += (_, _) =>
+        {
+            if (comboBox.SelectedItem is string selected)
+            {
+                item.SetSetting("fontFamily", selected == WidgetCatalog.DefaultFontLabel ? null : selected);
                 OnItemChanged();
             }
         };

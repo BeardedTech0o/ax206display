@@ -25,13 +25,13 @@ public static class WidgetFactory
     private static ClockWidget CreateClock(WidgetConfig config)
     {
         var timeFormat = config.Settings["timeFormat"]?.GetValue<string>() ?? "HH:mm:ss";
-        return new ClockWidget(config.Id, config.Width, config.Height, timeFormat, ReadTextColor(config));
+        return new ClockWidget(config.Id, config.Width, config.Height, timeFormat, ReadTextColor(config), ReadFontFamily(config));
     }
 
     private static TextWidget CreateText(WidgetConfig config)
     {
         var text = config.Settings["text"]?.GetValue<string>() ?? string.Empty;
-        return new TextWidget(config.Id, config.Width, config.Height, text, ReadTextColor(config));
+        return new TextWidget(config.Id, config.Width, config.Height, text, ReadTextColor(config), ReadFontFamily(config));
     }
 
     private static SystemStatWidget CreateStat(WidgetConfig config)
@@ -43,7 +43,7 @@ public static class WidgetFactory
         var unit = config.Settings["unit"]?.GetValue<string>() ?? string.Empty;
         var decimals = config.Settings["decimals"]?.GetValue<int>() ?? 0;
 
-        return new SystemStatWidget(config.Id, config.Width, config.Height, dataKey, label, unit, decimals, ReadTextColor(config));
+        return new SystemStatWidget(config.Id, config.Width, config.Height, dataKey, label, unit, decimals, ReadTextColor(config), ReadFontFamily(config));
     }
 
     private static SKColor? ReadTextColor(WidgetConfig config)
@@ -55,4 +55,6 @@ public static class WidgetFactory
 
         return null;
     }
+
+    private static string? ReadFontFamily(WidgetConfig config) => config.Settings["fontFamily"]?.GetValue<string>();
 }

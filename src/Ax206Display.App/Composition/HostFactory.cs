@@ -3,6 +3,7 @@ using Ax206Display.App.Services;
 using Ax206Display.App.Views;
 using Ax206Display.Config.Secrets;
 using Ax206Display.Config.Services;
+using Ax206Display.DataSources.Network;
 using Ax206Display.DataSources.SystemMonitor;
 using Ax206Display.DataSources.Weather;
 using Ax206Display.Rendering.Playback;
@@ -33,6 +34,7 @@ public static class HostFactory
 
         services.AddSingleton<IAx206DeviceDiscovery, LibUsbAx206DeviceDiscovery>();
         services.AddSingleton<ISystemMonitorSource, LibreHardwareMonitorSystemSource>();
+        services.AddSingleton<INetworkSpeedSource, NetworkInterfaceSpeedSource>();
         services.AddHttpClient<IWeatherSource, OpenMeteoWeatherSource>();
 
         services.AddSingleton<RenderDataHub>();
@@ -41,6 +43,7 @@ public static class HostFactory
         services.AddSingleton<TrayIconHostedService>();
         services.AddHostedService(sp => sp.GetRequiredService<TrayIconHostedService>());
         services.AddHostedService<SystemMonitorPumpService>();
+        services.AddHostedService<NetworkSpeedPumpService>();
         services.AddHostedService<DisplayManagerHostedService>();
         services.AddTransient<WidgetDesignerWindow>();
     }

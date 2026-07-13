@@ -1,3 +1,4 @@
+using Ax206Display.DataSources.Network;
 using Ax206Display.DataSources.SystemMonitor;
 using Ax206Display.Rendering.Widgets;
 
@@ -27,6 +28,8 @@ internal static class WidgetCatalog
         new(SystemStatKeys.MemoryUsedPercent, "Memory Used", "RAM", "%"),
         new(SystemStatKeys.GpuLoadPercent, "GPU Load", "GPU", "%"),
         new(SystemStatKeys.GpuTemperatureCelsius, "GPU Temperature", "GPU", "°C"),
+        new(NetworkSpeedKeys.DownloadMbps, "Network Download", "Down", " Mbps"),
+        new(NetworkSpeedKeys.UploadMbps, "Network Upload", "Up", " Mbps"),
     ];
 
     internal sealed record ColorSwatch(string Name, string Hex);
@@ -34,14 +37,39 @@ internal static class WidgetCatalog
     internal static readonly IReadOnlyList<ColorSwatch> Colors =
     [
         new("White", "#FFFFFF"),
+        new("Silver", "#C7C7CC"),
         new("Red", "#FF3B30"),
         new("Orange", "#FF9500"),
         new("Yellow", "#FFCC00"),
+        new("Gold", "#FFD60A"),
         new("Green", "#34C759"),
+        new("Mint", "#00C7BE"),
+        new("Teal", "#30B0C7"),
         new("Cyan", "#32ADE6"),
         new("Blue", "#007AFF"),
-        new("Magenta", "#FF2D95"),
+        new("Indigo", "#5856D6"),
+        new("Purple", "#AF52DE"),
+        new("Pink", "#FF2D95"),
+        new("Magenta", "#FF375F"),
+        new("Brown", "#A2845E"),
         new("Gray", "#8E8E93"),
+    ];
+
+    internal const string DefaultFontLabel = "Default";
+
+    internal static readonly IReadOnlyList<string> FontFamilies =
+    [
+        DefaultFontLabel,
+        "Segoe UI",
+        "Arial",
+        "Consolas",
+        "Courier New",
+        "Impact",
+        "Times New Roman",
+        "Verdana",
+        "Trebuchet MS",
+        "Georgia",
+        "Comic Sans MS",
     ];
 
     internal const string DefaultTimeFormat = "HH:mm:ss";
