@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
 using Ax206Display.Config.Models;
 using Ax206Display.Config.Services;
@@ -17,22 +18,30 @@ namespace Ax206Display.App.Services;
 /// displays, matches each one against a saved <see cref="DeviceProfileConfig"/>
 /// by <see cref="IAx206Transport.DeviceId"/>, auto-provisions a sane default
 /// (full-screen clock) layout for any display seen for the first time so
-/// plugging one in produces an immediate visible result, and runs one
-/// <see cref="DeviceDisplayLoop"/> per display until the host stops.
+/// plugging one in produces an immediate visible result, and supervises one
+/// <see cref="DeviceDisplayLoop"/> per display until the host stops -
+/// including reconnecting a display whose USB connection drops mid-session
+/// (see <see cref="SuperviseDeviceAsync"/>).
 /// </summary>
 public sealed partial class DisplayManagerHostedService : IHostedService, IDisposable
 {
     private static readonly TimeSpan MaxFrameInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan ConfigPollInterval = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan ReconnectInterval = TimeSpan.FromSeconds(5);
 
     private readonly IAx206DeviceDiscovery _discovery;
     private readonly ConfigService _configService;
     private readonly IRenderDataProvider _dataProvider;
     private readonly ILogger<DisplayManagerHostedService> _logger;
-    private readonly List<IAx206Transport> _transports = [];
+    private readonly SemaphoreSlim _discoveryLock = new(1, 1);
     private readonly List<Task> _loopTasks = [];
-    private readonly Dictionary<string, DeviceDisplayLoop> _loopsByDeviceId = [];
-    private readonly Dictionary<string, string?> _backgroundImagePathsByDeviceId = [];
+
+    // Concurrent: written and removed by each device's own
+    // SuperviseDeviceAsync task as it connects/reconnects, while
+    // WatchConfigForChangesAsync concurrently enumerates them on its own
+    // polling task - a plain Dictionary isn't safe under that access pattern.
+    private readonly ConcurrentDictionary<string, DeviceDisplayLoop> _loopsByDeviceId = new();
+    private readonly ConcurrentDictionary<string, string?> _backgroundImagePathsByDeviceId = new();
     private CancellationTokenSource? _loopCancellation;
 
     public DisplayManagerHostedService(
@@ -50,7 +59,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         var config = await _configService.LoadAsync(cancellationToken);
-        var discovered = await _discovery.DiscoverAsync(cancellationToken);
+        var discovered = await DiscoverSafelyAsync(cancellationToken);
 
         if (discovered.Count == 0)
         {
@@ -63,8 +72,6 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
 
         foreach (var transport in discovered)
         {
-            _transports.Add(transport);
-
             var profile = config.Devices.FirstOrDefault(d => d.Id == transport.DeviceId);
             if (profile is null)
             {
@@ -74,20 +81,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
                 LogAutoProvisioned(transport.DeviceId, profile.ScreenWidth, profile.ScreenHeight);
             }
 
-            var placements = BuildPlacements(transport.DeviceId, profile.Widgets);
-
-            var interval = TimeSpan.FromSeconds(1.0 / Math.Max(1, profile.TargetFps));
-            if (interval > MaxFrameInterval)
-            {
-                interval = MaxFrameInterval;
-            }
-
-            var backgroundImage = LoadBackgroundImage(transport.DeviceId, profile.BackgroundImagePath);
-            _backgroundImagePathsByDeviceId[transport.DeviceId] = profile.BackgroundImagePath;
-
-            var loop = new DeviceDisplayLoop(transport, placements, interval, _dataProvider, backgroundImage);
-            _loopsByDeviceId[transport.DeviceId] = loop;
-            _loopTasks.Add(RunLoopSafelyAsync(loop, transport.DeviceId, _loopCancellation.Token));
+            _loopTasks.Add(SuperviseDeviceAsync(transport.DeviceId, transport, _loopCancellation.Token));
         }
 
         if (configChanged)
@@ -110,25 +104,164 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
         }
         catch (Exception)
         {
-            // Individual failures are already logged in RunLoopSafelyAsync;
-            // this just keeps one bad device from failing host shutdown.
+            // Individual failures are already logged inside
+            // SuperviseDeviceAsync; this just keeps one bad device from
+            // failing host shutdown. Each supervisor disposes its own
+            // current transport as it exits, so there's nothing left to
+            // clean up here.
+        }
+    }
+
+    /// <summary>
+    /// Owns one device slot for the lifetime of the host: runs its display
+    /// loop, and if that loop ever ends abnormally (a USB disconnect mid-
+    /// blit is the common case - see docs on IAx206Transport.BlitAsync),
+    /// disposes the dead transport, waits, and re-runs discovery looking
+    /// for the same <paramref name="deviceId"/> again so the display
+    /// resumes without an app restart. Exits only on host shutdown or if
+    /// the device's profile is removed from config entirely.
+    /// </summary>
+    private async Task SuperviseDeviceAsync(string deviceId, IAx206Transport? initialTransport, CancellationToken cancellationToken)
+    {
+        var transport = initialTransport;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            if (transport is null)
+            {
+                transport = await TryFindTransportAsync(deviceId, cancellationToken);
+                if (transport is null)
+                {
+                    if (!await DelaySafelyAsync(ReconnectInterval, cancellationToken))
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                LogDeviceReconnected(deviceId);
+            }
+
+            var shouldReconnect = true;
+            try
+            {
+                var config = await _configService.LoadAsync(cancellationToken);
+                var profile = config.Devices.FirstOrDefault(d => d.Id == deviceId);
+                if (profile is null)
+                {
+                    shouldReconnect = false;
+                }
+                else
+                {
+                    var placements = BuildPlacements(deviceId, profile.Widgets);
+                    var backgroundImage = LoadBackgroundImage(deviceId, profile.BackgroundImagePath);
+                    _backgroundImagePathsByDeviceId[deviceId] = profile.BackgroundImagePath;
+
+                    var loop = new DeviceDisplayLoop(transport, placements, ComputeInterval(profile.TargetFps), _dataProvider, backgroundImage);
+                    _loopsByDeviceId[deviceId] = loop;
+
+                    await loop.RunAsync(cancellationToken);
+
+                    // RunAsync only returns (rather than throwing) when its
+                    // own cancellation check ends the loop - i.e. host
+                    // shutdown, not a device failure. Nothing to reconnect.
+                    shouldReconnect = false;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                shouldReconnect = false;
+            }
+            catch (Exception ex)
+            {
+                LogLoopFailed(ex, deviceId);
+            }
+            finally
+            {
+                _loopsByDeviceId.TryRemove(deviceId, out _);
+                transport?.Dispose();
+                transport = null;
+            }
+
+            if (!shouldReconnect || cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+
+            LogReconnecting(deviceId);
+            if (!await DelaySafelyAsync(ReconnectInterval, cancellationToken))
+            {
+                break;
+            }
+        }
+    }
+
+    private async Task<IAx206Transport?> TryFindTransportAsync(string deviceId, CancellationToken cancellationToken)
+    {
+        var discovered = await DiscoverSafelyAsync(cancellationToken);
+
+        IAx206Transport? match = null;
+        foreach (var transport in discovered)
+        {
+            if (match is null && transport.DeviceId == deviceId)
+            {
+                match = transport;
+            }
+            else
+            {
+                // Either a duplicate match (shouldn't happen - device IDs
+                // are meant to be unique) or a different device this
+                // supervisor isn't responsible for - don't leak its handle.
+                transport.Dispose();
+            }
         }
 
-        foreach (var transport in _transports)
+        return match;
+    }
+
+    /// <summary>
+    /// Serializes every discovery scan across all device supervisors -
+    /// concurrent reconnect attempts (e.g. two displays dropping around the
+    /// same time) would otherwise race to open/claim the same USB devices.
+    /// </summary>
+    private async Task<IReadOnlyList<IAx206Transport>> DiscoverSafelyAsync(CancellationToken cancellationToken)
+    {
+        await _discoveryLock.WaitAsync(cancellationToken);
+        try
         {
-            transport.Dispose();
+            return await _discovery.DiscoverAsync(cancellationToken);
         }
+        finally
+        {
+            _discoveryLock.Release();
+        }
+    }
+
+    private static async Task<bool> DelaySafelyAsync(TimeSpan delay, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(delay, cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    private static TimeSpan ComputeInterval(int targetFps)
+    {
+        var interval = TimeSpan.FromSeconds(1.0 / Math.Max(1, targetFps));
+        return interval > MaxFrameInterval ? MaxFrameInterval : interval;
     }
 
     private async Task WatchConfigForChangesAsync(CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            try
-            {
-                await Task.Delay(ConfigPollInterval, cancellationToken);
-            }
-            catch (OperationCanceledException)
+            if (!await DelaySafelyAsync(ConfigPollInterval, cancellationToken))
             {
                 break;
             }
@@ -209,25 +342,10 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
         return placements;
     }
 
-    private async Task RunLoopSafelyAsync(DeviceDisplayLoop loop, string deviceId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await loop.RunAsync(cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected on shutdown.
-        }
-        catch (Exception ex)
-        {
-            LogLoopFailed(ex, deviceId);
-        }
-    }
-
     public void Dispose()
     {
         _loopCancellation?.Dispose();
+        _discoveryLock.Dispose();
     }
 
     private static async Task<DeviceProfileConfig> ProvisionDefaultProfileAsync(IAx206Transport transport, CancellationToken cancellationToken)
@@ -329,8 +447,14 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
     [LoggerMessage(Level = LogLevel.Information, Message = "Auto-provisioned a default layout for {DeviceId} ({Width}x{Height}).")]
     private partial void LogAutoProvisioned(string deviceId, int width, int height);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Display loop for {DeviceId} stopped unexpectedly.")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Display loop for {DeviceId} stopped unexpectedly; will try to reconnect.")]
     private partial void LogLoopFailed(Exception exception, string deviceId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Attempting to reconnect {DeviceId}...")]
+    private partial void LogReconnecting(string deviceId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Reconnected {DeviceId}.")]
+    private partial void LogDeviceReconnected(string deviceId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to reload widget config; keeping the previous layout on screen.")]
     private partial void LogConfigReloadFailed(Exception exception);
