@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Lets us fire the workflow directly via the API/UI, independent of
+  # push/pull_request event delivery - useful for diagnosing whether Actions
+  # is working at all versus a specific event trigger not firing.
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  linux-build-test:
+    name: Linux (build + test cross-platform projects)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # The WPF app (Ax206Display.App) can only be restored/built on Windows,
+      # so this job targets a solution filter with everything except it:
+      # Protocol/Transport/Rendering/DataSources/Config + the test project.
+      #
+      # --locked-mode fails the restore outright if the resolved dependency
+      # graph (including transitive packages) drifts from the committed
+      # packages.lock.json files, instead of silently re-resolving - the
+      # graph only changes via a reviewed lock-file update.
+      - name: Restore (locked mode)
+        run: dotnet restore Ax206Display.CrossPlatform.slnf --locked-mode
+
+      - name: Build
+        run: dotnet build Ax206Display.CrossPlatform.slnf --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Ax206Display.CrossPlatform.slnf --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-test-results
+          path: tests/Ax206Display.Tests/TestResults/test-results.trx
+
+      # NuGetAudit (enabled in Directory.Build.props) already fails restore on
+      # a known-vulnerable direct/transitive package; this is a belt-and-
+      # suspenders explicit check that also prints a readable report.
+      - name: Check for vulnerable dependencies
+        if: always()
+        run: |
+          set -e
+          for project in \
+            src/Ax206Display.Protocol/Ax206Display.Protocol.csproj \
+            src/Ax206Display.Transport/Ax206Display.Transport.csproj \
+            src/Ax206Display.Rendering/Ax206Display.Rendering.csproj \
+            src/Ax206Display.DataSources/Ax206Display.DataSources.csproj \
+            src/Ax206Display.Config/Ax206Display.Config.csproj \
+            tests/Ax206Display.Tests/Ax206Display.Tests.csproj; do
+            dotnet list "$project" package --vulnerable --include-transitive | tee /tmp/vuln-check.txt
+            if grep -q "has the following vulnerable packages" /tmp/vuln-check.txt; then
+              echo "::error::Vulnerable package(s) found in $project"
+              exit 1
+            fi
+          done
+
+  windows-build:
+    name: Windows (build WPF app)
+    runs-on: windows-latest
+    # `if:` conditions can't reference the secrets context directly (GitHub
+    # rejects the whole workflow file at parse time if they do - this is what
+    # broke every single run, on every trigger, until this was found: see the
+    # "Sign Ax206Display.exe" step below). Routing it through job-level env:
+    # is the documented workaround; env vars ARE visible to step-level if:.
+    env:
+      HAS_SIGNING_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Ax206Display.App's packages.lock.json can only be generated on
+      # Windows (it's the only project that needs a Windows restore), so it
+      # isn't committed yet - this restore auto-generates one per run rather
+      # than failing. Once a Windows dev runs `dotnet restore
+      # src/Ax206Display.App -p:RestorePackagesWithLockFile=true` and commits
+      # the resulting lock file, switch this to `--locked-mode` like the
+      # Linux job.
+      - name: Restore
+        run: dotnet restore Ax206Display.sln
+
+      - name: Build
+        run: dotnet build Ax206Display.sln --configuration Release --no-restore
+
+      # No-op until a real code-signing certificate is configured (security
+      # audit finding F3 - see AuthenticodeVerifier's doc comment). Once
+      # WINDOWS_CODE_SIGNING_PFX_BASE64 and WINDOWS_CODE_SIGNING_PASSWORD are
+      # set as repo secrets, this signs Ax206Display.exe with a SHA-256
+      # Authenticode signature and an RFC 3161 timestamp, and
+      # AuthenticodeVerifier.EnforcementEnabled should be flipped to true.
+      - name: Sign Ax206Display.exe
+        if: ${{ github.event_name != 'pull_request' && env.HAS_SIGNING_CERT == 'true' }}
+        shell: pwsh
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "ax206display-signing.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 }}"))
+          try {
+            $exePath = "src/Ax206Display.App/bin/Release/net8.0-windows10.0.19041/Ax206Display.exe"
+            & signtool.exe sign /f $pfxPath /p "${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}" `
+              /fd sha256 /tr http://timestamp.digicert.com /td sha256 $exePath
+          } finally {
+            Remove-Item -Path $pfxPath -Force -ErrorAction SilentlyContinue
+          }

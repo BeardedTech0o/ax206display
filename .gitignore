@@ -1,0 +1,37 @@
+## .NET / Visual Studio / Rider
+bin/
+obj/
+out/
+*.user
+*.userosscache
+*.suo
+.vs/
+.vscode/
+*.userprefs
+
+## Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+## Rider
+.idea/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Publish output
+publish/
+*.pubxml.user
+
+## NuGet
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+
+## Secrets (never commit real secrets/config)
+appsettings.local.json
+*.secrets.json
