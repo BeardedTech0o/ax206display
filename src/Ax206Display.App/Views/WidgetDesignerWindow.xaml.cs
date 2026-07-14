@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -281,7 +282,7 @@ public partial class WidgetDesignerWindow : Window
 
     private void OnBrightnessChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        BrightnessValueText.Text = ((int)BrightnessSlider.Value).ToString();
+        BrightnessValueText.Text = ((int)BrightnessSlider.Value).ToString(CultureInfo.InvariantCulture);
 
         if (_isLoadingDevice)
         {
