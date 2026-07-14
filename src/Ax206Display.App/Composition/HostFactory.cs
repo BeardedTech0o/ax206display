@@ -48,6 +48,7 @@ public static class HostFactory
         services.AddHostedService<NetworkSpeedPumpService>();
         services.AddHostedService<ProxmoxPumpService>();
         services.AddHostedService<PiHolePumpService>();
+        services.AddHostedService<UniFiPumpService>();
         services.AddHostedService<DisplayManagerHostedService>();
         services.AddTransient<WidgetDesignerWindow>();
         services.AddTransient<IntegrationsWindow>();

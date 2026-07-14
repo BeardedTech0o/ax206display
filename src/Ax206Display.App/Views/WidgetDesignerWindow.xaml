@@ -28,6 +28,12 @@
             <Button x:Name="BackgroundButton" Content="Background..." Margin="0,0,4,0" Padding="10,4" Click="OnBackgroundClick"/>
             <Button x:Name="ClearBackgroundButton" Content="Clear Background" Margin="0,0,14,0" Padding="10,4" Click="OnClearBackgroundClick"/>
             <CheckBox x:Name="ShowGridCheckBox" Content="Show Grid" VerticalAlignment="Center" Checked="OnShowGridChanged" Unchecked="OnShowGridChanged"/>
+
+            <Separator Margin="14,0" Width="1"/>
+
+            <TextBlock Text="Brightness:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <Slider x:Name="BrightnessSlider" Width="120" Minimum="0" Maximum="7" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="OnBrightnessChanged"/>
+            <TextBlock x:Name="BrightnessValueText" VerticalAlignment="Center" Margin="6,0,0,0" Width="14"/>
         </StackPanel>
 
         <Border DockPanel.Dock="Right" Width="240" Margin="10,0,0,0" BorderBrush="#CCCCCC" BorderThickness="1" Padding="10">

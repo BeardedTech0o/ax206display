@@ -1,5 +1,7 @@
 using Ax206Display.DataSources.Network;
+using Ax206Display.DataSources.PiHole;
 using Ax206Display.DataSources.SystemMonitor;
+using Ax206Display.DataSources.UniFi;
 using Ax206Display.Rendering.Widgets;
 
 namespace Ax206Display.App.Views.Designer;
@@ -30,6 +32,12 @@ internal static class WidgetCatalog
         new(SystemStatKeys.GpuTemperatureCelsius, "GPU Temperature", "GPU", "°C"),
         new(NetworkSpeedKeys.DownloadMbps, "Network Download", "Down", " Mbps"),
         new(NetworkSpeedKeys.UploadMbps, "Network Upload", "Up", " Mbps"),
+        new(PiHoleStatKeys.AdsBlockedToday, "Pi-hole: Ads Blocked Today", "Blocked", string.Empty),
+        new(PiHoleStatKeys.AdsPercentageToday, "Pi-hole: Blocked Percentage", "Blocked", "%"),
+        new(PiHoleStatKeys.DnsQueriesToday, "Pi-hole: DNS Queries Today", "Queries", string.Empty),
+        new(UniFiStatKeys.ClientCount, "UniFi: Connected Clients", "Clients", string.Empty),
+        new(UniFiStatKeys.WanDownloadMbps, "UniFi: WAN Download", "Down", " Mbps"),
+        new(UniFiStatKeys.WanUploadMbps, "UniFi: WAN Upload", "Up", " Mbps"),
     ];
 
     internal sealed record ColorSwatch(string Name, string Hex);

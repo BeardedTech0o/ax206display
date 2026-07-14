@@ -42,6 +42,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
     // polling task - a plain Dictionary isn't safe under that access pattern.
     private readonly ConcurrentDictionary<string, DeviceDisplayLoop> _loopsByDeviceId = new();
     private readonly ConcurrentDictionary<string, string?> _backgroundImagePathsByDeviceId = new();
+    private readonly ConcurrentDictionary<string, int> _brightnessByDeviceId = new();
     private CancellationTokenSource? _loopCancellation;
 
     public DisplayManagerHostedService(
@@ -157,10 +158,12 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
                     var placements = BuildPlacements(deviceId, profile.Widgets);
                     var backgroundImage = LoadBackgroundImage(deviceId, profile.BackgroundImagePath);
                     _backgroundImagePathsByDeviceId[deviceId] = profile.BackgroundImagePath;
+                    _brightnessByDeviceId[deviceId] = profile.Brightness;
 
                     var loop = new DeviceDisplayLoop(transport, placements, ComputeInterval(profile.TargetFps), _dataProvider, backgroundImage);
                     _loopsByDeviceId[deviceId] = loop;
 
+                    await loop.SetBrightnessAsync(profile.Brightness, cancellationToken);
                     await loop.RunAsync(cancellationToken);
 
                     // RunAsync only returns (rather than throwing) when its
@@ -286,6 +289,14 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
                     {
                         loop.UpdateBackgroundImage(LoadBackgroundImage(deviceId, profile.BackgroundImagePath));
                         _backgroundImagePathsByDeviceId[deviceId] = profile.BackgroundImagePath;
+                    }
+
+                    // Same idea: only send the USB property write when the
+                    // saved value actually changed, not on every poll tick.
+                    if (!_brightnessByDeviceId.TryGetValue(deviceId, out var previousBrightness) || previousBrightness != profile.Brightness)
+                    {
+                        await loop.SetBrightnessAsync(profile.Brightness, cancellationToken);
+                        _brightnessByDeviceId[deviceId] = profile.Brightness;
                     }
                 }
             }

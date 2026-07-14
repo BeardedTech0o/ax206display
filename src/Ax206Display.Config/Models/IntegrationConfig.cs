@@ -18,6 +18,9 @@ public sealed record IntegrationConfig
     /// <summary>Proxmox login realm (e.g. "pam", "pve") - unused by integrations that don't have the concept.</summary>
     public string? Realm { get; init; }
 
+    /// <summary>UniFi controller site name (e.g. "default") - unused by integrations that don't have the concept.</summary>
+    public string? Site { get; init; }
+
     public string? SecretKey { get; init; }
 
     /// <summary>

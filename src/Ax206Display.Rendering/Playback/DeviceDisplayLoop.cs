@@ -1,3 +1,4 @@
+using Ax206Display.Protocol.Commands;
 using Ax206Display.Rendering.Compositing;
 using Ax206Display.Rendering.PixelFormats;
 using Ax206Display.Rendering.Widgets;
@@ -61,6 +62,16 @@ public sealed partial class DeviceDisplayLoop
     {
         Volatile.Write(ref _backgroundImage, backgroundImage);
     }
+
+    /// <summary>
+    /// Sends a hardware backlight level directly to the transport (0-7, per
+    /// docs/protocol-spec.md). This is a one-off SetProperty command, not
+    /// part of the per-frame blit path, so - unlike placements/background -
+    /// there's nothing to swap in on the next frame; it takes effect on the
+    /// display as soon as the device processes it.
+    /// </summary>
+    public Task SetBrightnessAsync(int brightness, CancellationToken cancellationToken = default) =>
+        _transport.SetPropertyAsync(Ax206Property.Brightness, (ushort)Math.Clamp(brightness, 0, 7), cancellationToken);
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {

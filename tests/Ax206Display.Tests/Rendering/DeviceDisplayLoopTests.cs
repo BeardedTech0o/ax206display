@@ -1,3 +1,4 @@
+using Ax206Display.Protocol.Commands;
 using Ax206Display.Rendering.Playback;
 using Ax206Display.Rendering.Widgets;
 using Ax206Display.Transport.Mock;
@@ -131,6 +132,30 @@ public class DeviceDisplayLoopTests
 
         var lastFramePixels = transport.BlitCalls[^1].Pixels;
         Assert.Contains(lastFramePixels, b => b != 0);
+    }
+
+    [Fact]
+    public async Task SetBrightnessAsync_ForwardsThePropertyWriteToTheTransport()
+    {
+        using var transport = new MockAx206Transport("mock-1", 10, 8);
+        var loop = new DeviceDisplayLoop(transport, placements: [], TimeSpan.FromMilliseconds(10));
+
+        await loop.SetBrightnessAsync(5);
+
+        Assert.Equal((ushort)5, transport.Properties[Ax206Property.Brightness]);
+    }
+
+    [Theory]
+    [InlineData(-3, 0)]
+    [InlineData(99, 7)]
+    public async Task SetBrightnessAsync_ClampsOutOfRangeValuesToTheValid0To7Range(int requested, int expected)
+    {
+        using var transport = new MockAx206Transport("mock-1", 10, 8);
+        var loop = new DeviceDisplayLoop(transport, placements: [], TimeSpan.FromMilliseconds(10));
+
+        await loop.SetBrightnessAsync(requested);
+
+        Assert.Equal((ushort)expected, transport.Properties[Ax206Property.Brightness]);
     }
 
     private sealed class DataCapturingWidget : IWidget

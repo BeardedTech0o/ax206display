@@ -114,6 +114,7 @@ public partial class WidgetDesignerWindow : Window
         DesignerRoot.Height = device.ScreenHeight;
 
         LoadBackgroundImage(device.BackgroundImagePath);
+        BrightnessSlider.Value = device.Brightness;
 
         RebuildOverlays();
         ShowEmptyPropertyPanel();
@@ -278,6 +279,18 @@ public partial class WidgetDesignerWindow : Window
         PreviewElement.InvalidateVisual();
     }
 
+    private void OnBrightnessChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        BrightnessValueText.Text = ((int)BrightnessSlider.Value).ToString();
+
+        if (_isLoadingDevice)
+        {
+            return;
+        }
+
+        SaveButton.IsEnabled = true;
+    }
+
     private async void OnSaveClick(object sender, RoutedEventArgs e)
     {
         if (_selectedDevice is null)
@@ -300,6 +313,7 @@ public partial class WidgetDesignerWindow : Window
             {
                 Widgets = [.. _items.Select(i => i.ToConfig())],
                 BackgroundImagePath = _backgroundImagePath,
+                Brightness = (int)BrightnessSlider.Value,
             };
             var updatedDevices = new List<DeviceProfileConfig>(freshConfig.Devices);
             updatedDevices[index] = updatedDevice;

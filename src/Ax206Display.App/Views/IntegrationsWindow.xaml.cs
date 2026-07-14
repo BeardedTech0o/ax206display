@@ -7,20 +7,22 @@ using Ax206Display.Config.Services;
 using Ax206Display.DataSources.Http;
 using Ax206Display.DataSources.PiHole;
 using Ax206Display.DataSources.Proxmox;
+using Ax206Display.DataSources.UniFi;
 
 namespace Ax206Display.App.Views;
 
 /// <summary>
-/// Lets the user configure the Proxmox and Pi-hole integrations without
-/// editing config.json or the secret store by hand. Each section is
-/// independently testable/saveable/removable; a saved password/API token is
-/// never redisplayed - the field stays blank and "Test &amp; Save" reuses the
-/// existing secret unless a new value is entered.
+/// Lets the user configure the Proxmox, Pi-hole, and UniFi integrations
+/// without editing config.json or the secret store by hand - each on its own
+/// tab. Each section is independently testable/saveable/removable; a saved
+/// password/API token is never redisplayed - the field stays blank and
+/// "Test &amp; Save" reuses the existing secret unless a new value is entered.
 /// </summary>
 public partial class IntegrationsWindow : Window
 {
     private const string ProxmoxKind = "proxmox";
     private const string PiHoleKind = "pihole";
+    private const string UniFiKind = "unifi";
 
     private readonly ConfigService _configService;
     private readonly SecretStore _secretStore;
@@ -54,6 +56,15 @@ public partial class IntegrationsWindow : Window
                 PiHoleUrlTextBox.Text = pihole.BaseUrl;
                 PiHoleThumbprintTextBox.Text = pihole.PinnedCertificateSha256Thumbprint ?? string.Empty;
                 SetPiHoleStatus("Configured. Leave the token blank to keep the saved one.");
+            }
+
+            if (config.Integrations.FirstOrDefault(i => i.Kind == UniFiKind) is { } unifi)
+            {
+                UniFiUrlTextBox.Text = unifi.BaseUrl;
+                UniFiUsernameTextBox.Text = unifi.Username ?? string.Empty;
+                UniFiSiteTextBox.Text = unifi.Site ?? "default";
+                UniFiThumbprintTextBox.Text = unifi.PinnedCertificateSha256Thumbprint ?? string.Empty;
+                SetUniFiStatus("Configured. Leave the password blank to keep the saved one.");
             }
         }
         catch (Exception ex)
@@ -167,6 +178,61 @@ public partial class IntegrationsWindow : Window
         }
     }
 
+    private async void OnUniFiTestAndSaveClick(object sender, RoutedEventArgs e)
+    {
+        SetUniFiStatus("Testing...");
+        try
+        {
+            var baseUrl = UniFiUrlTextBox.Text.Trim();
+            var username = UniFiUsernameTextBox.Text.Trim();
+            var site = string.IsNullOrWhiteSpace(UniFiSiteTextBox.Text) ? "default" : UniFiSiteTextBox.Text.Trim();
+            var thumbprint = string.IsNullOrWhiteSpace(UniFiThumbprintTextBox.Text) ? null : UniFiThumbprintTextBox.Text.Trim();
+
+            if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(username))
+            {
+                SetUniFiStatus("Host URL and username are required.");
+                return;
+            }
+
+            var config = await _configService.LoadAsync();
+            var existing = config.Integrations.FirstOrDefault(i => i.Kind == UniFiKind);
+
+            var password = await ResolveSecretAsync(UniFiPasswordBox.Password, existing);
+            if (string.IsNullOrEmpty(password))
+            {
+                SetUniFiStatus("Password is required.");
+                return;
+            }
+
+            var integrationId = existing?.Id ?? Guid.NewGuid().ToString("N");
+            var secretKey = existing?.SecretKey ?? $"integration.{integrationId}";
+
+            var testConfig = new IntegrationConfig
+            {
+                Id = integrationId,
+                Kind = UniFiKind,
+                BaseUrl = baseUrl,
+                Username = username,
+                Site = site,
+                SecretKey = secretKey,
+                PinnedCertificateSha256Thumbprint = thumbprint,
+            };
+
+            using var httpClient = IntegrationHttpClientFactory.Create(testConfig, enableCookies: true);
+            var client = new UniFiClient(httpClient);
+            await client.LoginAsync(username, password);
+            var status = await client.GetSiteHealthAsync(site);
+
+            await SaveIntegrationAsync(config, testConfig, secretKey, password);
+
+            SetUniFiStatus($"Connected - {status.Subsystems.Count} subsystem(s) reporting. Saved.");
+        }
+        catch (Exception ex)
+        {
+            SetUniFiStatus("Failed: " + ex.Message);
+        }
+    }
+
     /// <summary>Returns the freshly entered secret, or - if the field was left blank - the previously saved one for this integration.</summary>
     private async Task<string?> ResolveSecretAsync(string enteredValue, IntegrationConfig? existing)
     {
@@ -205,6 +271,12 @@ public partial class IntegrationsWindow : Window
     {
         await RemoveIntegrationAsync(PiHoleKind, SetPiHoleStatus);
         PiHoleTokenBox.Password = string.Empty;
+    }
+
+    private async void OnUniFiRemoveClick(object sender, RoutedEventArgs e)
+    {
+        await RemoveIntegrationAsync(UniFiKind, SetUniFiStatus);
+        UniFiPasswordBox.Password = string.Empty;
     }
 
     private async Task RemoveIntegrationAsync(string kind, Action<string> setStatus)
@@ -247,6 +319,11 @@ public partial class IntegrationsWindow : Window
         await DetectCertificateAsync(PiHoleUrlTextBox.Text, PiHoleThumbprintTextBox, SetPiHoleStatus);
     }
 
+    private async void OnUniFiDetectCertificateClick(object sender, RoutedEventArgs e)
+    {
+        await DetectCertificateAsync(UniFiUrlTextBox.Text, UniFiThumbprintTextBox, SetUniFiStatus);
+    }
+
     private static async Task DetectCertificateAsync(string baseUrlText, TextBox thumbprintTextBox, Action<string> setStatus)
     {
         try
@@ -286,4 +363,6 @@ public partial class IntegrationsWindow : Window
     private void SetProxmoxStatus(string text) => ProxmoxStatusText.Text = text;
 
     private void SetPiHoleStatus(string text) => PiHoleStatusText.Text = text;
+
+    private void SetUniFiStatus(string text) => UniFiStatusText.Text = text;
 }
