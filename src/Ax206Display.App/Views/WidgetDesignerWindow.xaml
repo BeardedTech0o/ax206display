@@ -10,7 +10,14 @@
         Foreground="{StaticResource TextBrush}"
         FontFamily="{StaticResource AppFontFamily}">
     <DockPanel Margin="10" Background="{StaticResource SurfaceBrush}">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+        <!--
+            WrapPanel, not StackPanel: a horizontal StackPanel never wraps,
+            so on a narrow/resized window its overflow content (the Save
+            button, in practice) silently extends past the visible window
+            bounds instead of being reachable. WrapPanel drops extra buttons
+            to a second line instead - nothing is ever off-view.
+        -->
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
             <TextBlock Text="Device:" VerticalAlignment="Center" Margin="0,0,6,0"/>
             <ComboBox x:Name="DeviceComboBox" Width="200" DisplayMemberPath="Name" SelectionChanged="OnDeviceSelectionChanged"/>
             <Button x:Name="RefreshDevicesButton" Content="Refresh" Margin="4,0,0,0" Padding="10,4" Click="OnRefreshDevicesClick"/>
@@ -28,9 +35,9 @@
             <Button x:Name="SaveButton" Content="Save" Padding="16,4" Style="{StaticResource AccentButtonStyle}" Click="OnSaveClick" IsEnabled="False"/>
 
             <TextBlock x:Name="StatusText" Margin="14,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Text2Brush}" TextWrapping="Wrap"/>
-        </StackPanel>
+        </WrapPanel>
 
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
             <Button x:Name="BackgroundButton" Content="Background..." Margin="0,0,4,0" Padding="10,4" Click="OnBackgroundClick"/>
             <Button x:Name="ClearBackgroundButton" Content="Clear Background" Margin="0,0,14,0" Padding="10,4" Click="OnClearBackgroundClick"/>
             <CheckBox x:Name="ShowGridCheckBox" Content="Show Grid" VerticalAlignment="Center" Checked="OnShowGridChanged" Unchecked="OnShowGridChanged"/>
@@ -40,7 +47,7 @@
             <TextBlock Text="Brightness:" VerticalAlignment="Center" Margin="0,0,6,0"/>
             <Slider x:Name="BrightnessSlider" Width="120" Minimum="0" Maximum="7" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="OnBrightnessChanged"/>
             <TextBlock x:Name="BrightnessValueText" VerticalAlignment="Center" Margin="6,0,0,0" Width="14"/>
-        </StackPanel>
+        </WrapPanel>
 
         <Border DockPanel.Dock="Right" Width="240" Margin="10,0,0,0" Background="{StaticResource Surface2Brush}" BorderBrush="{StaticResource ForgeBorderBrush}" BorderThickness="1" CornerRadius="{StaticResource CardCornerRadius}" Padding="10">
             <StackPanel x:Name="PropertyPanel">

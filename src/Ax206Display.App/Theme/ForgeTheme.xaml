@@ -94,34 +94,16 @@
         </Setter>
     </Style>
 
-    <!-- Applied explicitly (x:Key) to each window's one or two real calls-to-action - forge's .btn-primary. -->
+    <!--
+        Applied explicitly (x:Key) to each window's one or two real calls-to-
+        action (Save, Test & Save). Same grey fill and hover/pressed states
+        as every other button (inherited via BasedOn, template untouched) -
+        only the text color changes, to the same accent lime the brightness
+        slider uses, so it reads as "the important button" without a full
+        solid-color block.
+    -->
     <Style x:Key="AccentButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
-        <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="Bg"
-                            Background="{TemplateBinding Background}"
-                            CornerRadius="{StaticResource ControlCornerRadius}"
-                            Padding="{TemplateBinding Padding}"
-                            TextElement.Foreground="{TemplateBinding Foreground}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource AccentDarkBrush}"/>
-                        </Trigger>
-                        <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Bg" Property="Opacity" Value="0.85"/>
-                        </Trigger>
-                        <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="Bg" Property="Opacity" Value="0.4"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
+        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
     </Style>
 
     <!-- ======================= TextBox / PasswordBox ======================= -->
