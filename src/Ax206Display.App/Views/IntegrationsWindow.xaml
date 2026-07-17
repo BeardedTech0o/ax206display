@@ -10,7 +10,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="8">
                     <TextBlock Text="Proxmox VE" FontWeight="Bold" FontSize="16" Margin="0,0,0,8"/>
-                    <TextBlock Text="Shows live CPU/memory for VMs and containers as a &quot;System Stat&quot; widget reading in the Widget Designer." TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,10"/>
+                    <TextBlock Text="Shows live CPU/memory for VMs and containers as a &quot;System Stat&quot; widget reading in the Widget Designer." TextWrapping="Wrap" Foreground="{StaticResource Text2Brush}" Margin="0,0,0,10"/>
 
                     <TextBlock Text="Host URL (e.g. https://proxmox.local:8006)" Margin="0,0,0,2"/>
                     <TextBox x:Name="ProxmoxUrlTextBox" Margin="0,0,0,8"/>
@@ -31,10 +31,10 @@
                     </DockPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                        <Button Content="Test &amp; Save" Padding="12,4" Margin="0,0,8,0" Click="OnProxmoxTestAndSaveClick"/>
+                        <Button Content="Test &amp; Save" Padding="12,4" Margin="0,0,8,0" Style="{StaticResource AccentButtonStyle}" Click="OnProxmoxTestAndSaveClick"/>
                         <Button Content="Remove" Padding="12,4" Click="OnProxmoxRemoveClick"/>
                     </StackPanel>
-                    <TextBlock x:Name="ProxmoxStatusText" TextWrapping="Wrap" Foreground="Gray"/>
+                    <TextBlock x:Name="ProxmoxStatusText" TextWrapping="Wrap" Foreground="{StaticResource Text2Brush}"/>
                 </StackPanel>
             </ScrollViewer>
         </TabItem>
@@ -43,7 +43,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="8">
                     <TextBlock Text="Pi-hole" FontWeight="Bold" FontSize="16" Margin="0,0,0,8"/>
-                    <TextBlock Text="Shows ads blocked today, DNS queries today, and block percentage as a &quot;System Stat&quot; widget reading." TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,10"/>
+                    <TextBlock Text="Shows ads blocked today, DNS queries today, and block percentage as a &quot;System Stat&quot; widget reading." TextWrapping="Wrap" Foreground="{StaticResource Text2Brush}" Margin="0,0,0,10"/>
 
                     <TextBlock Text="Host URL (e.g. http://pi.hole or http://192.168.1.10)" Margin="0,0,0,2"/>
                     <TextBox x:Name="PiHoleUrlTextBox" Margin="0,0,0,8"/>
@@ -58,10 +58,10 @@
                     </DockPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                        <Button Content="Test &amp; Save" Padding="12,4" Margin="0,0,8,0" Click="OnPiHoleTestAndSaveClick"/>
+                        <Button Content="Test &amp; Save" Padding="12,4" Margin="0,0,8,0" Style="{StaticResource AccentButtonStyle}" Click="OnPiHoleTestAndSaveClick"/>
                         <Button Content="Remove" Padding="12,4" Click="OnPiHoleRemoveClick"/>
                     </StackPanel>
-                    <TextBlock x:Name="PiHoleStatusText" TextWrapping="Wrap" Foreground="Gray"/>
+                    <TextBlock x:Name="PiHoleStatusText" TextWrapping="Wrap" Foreground="{StaticResource Text2Brush}"/>
                 </StackPanel>
             </ScrollViewer>
         </TabItem>
@@ -70,7 +70,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="8">
                     <TextBlock Text="UniFi" FontWeight="Bold" FontSize="16" Margin="0,0,0,8"/>
-                    <TextBlock Text="Shows connected client count and WAN download/upload throughput as a &quot;System Stat&quot; widget reading. Works with both UniFi OS consoles (UDM/UDM Pro/Cloud Key Gen2+) and the classic standalone Network Application - the connection type is detected automatically." TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,10"/>
+                    <TextBlock Text="Shows connected client count and WAN download/upload throughput as a &quot;System Stat&quot; widget reading. Works with both UniFi OS consoles (UDM/UDM Pro/Cloud Key Gen2+) and the classic standalone Network Application - the connection type is detected automatically." TextWrapping="Wrap" Foreground="{StaticResource Text2Brush}" Margin="0,0,0,10"/>
 
                     <TextBlock Text="Host URL (e.g. https://192.168.1.1 or https://unifi.local:8443)" TextWrapping="Wrap" Margin="0,0,0,2"/>
                     <TextBox x:Name="UniFiUrlTextBox" Margin="0,0,0,8"/>
@@ -91,10 +91,10 @@
                     </DockPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                        <Button Content="Test &amp; Save" Padding="12,4" Margin="0,0,8,0" Click="OnUniFiTestAndSaveClick"/>
+                        <Button Content="Test &amp; Save" Padding="12,4" Margin="0,0,8,0" Style="{StaticResource AccentButtonStyle}" Click="OnUniFiTestAndSaveClick"/>
                         <Button Content="Remove" Padding="12,4" Click="OnUniFiRemoveClick"/>
                     </StackPanel>
-                    <TextBlock x:Name="UniFiStatusText" TextWrapping="Wrap" Foreground="Gray"/>
+                    <TextBlock x:Name="UniFiStatusText" TextWrapping="Wrap" Foreground="{StaticResource Text2Brush}"/>
                 </StackPanel>
             </ScrollViewer>
         </TabItem>
