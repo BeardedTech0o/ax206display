@@ -49,7 +49,8 @@ public static class HostFactory
         services.AddHostedService<ProxmoxPumpService>();
         services.AddHostedService<PiHolePumpService>();
         services.AddHostedService<UniFiPumpService>();
-        services.AddHostedService<DisplayManagerHostedService>();
+        services.AddSingleton<DisplayManagerHostedService>();
+        services.AddHostedService(sp => sp.GetRequiredService<DisplayManagerHostedService>());
         services.AddTransient<WidgetDesignerWindow>();
         services.AddTransient<IntegrationsWindow>();
     }

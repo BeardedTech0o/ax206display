@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Ax206Display.App.Services;
 using Ax206Display.App.Views.Designer;
 using Ax206Display.Config.Models;
 using Ax206Display.Config.Services;
@@ -28,6 +29,7 @@ public partial class WidgetDesignerWindow : Window
     private readonly ConfigService _configService;
     private readonly IRenderDataProvider _dataProvider;
     private readonly ProxmoxGuestDirectory _proxmoxGuestDirectory;
+    private readonly DisplayManagerHostedService _displayManager;
     private readonly DispatcherTimer _timer;
 
     private readonly List<WidgetDesignItem> _items = [];
@@ -43,12 +45,13 @@ public partial class WidgetDesignerWindow : Window
     private string? _backgroundImagePath;
     private bool _showGrid;
 
-    public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider, ProxmoxGuestDirectory proxmoxGuestDirectory)
+    public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider, ProxmoxGuestDirectory proxmoxGuestDirectory, DisplayManagerHostedService displayManager)
     {
         InitializeComponent();
         _configService = configService;
         _dataProvider = dataProvider;
         _proxmoxGuestDirectory = proxmoxGuestDirectory;
+        _displayManager = displayManager;
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => PreviewElement.InvalidateVisual();
@@ -64,18 +67,53 @@ public partial class WidgetDesignerWindow : Window
 
     private async Task LoadConfigAsync()
     {
+        // Preserved across a Refresh so re-scanning for newly plugged-in
+        // devices doesn't bounce the user back to the first device in the
+        // list if they had a different one selected.
+        var previouslySelectedId = _selectedDevice?.Id;
+
         _config = await _configService.LoadAsync();
         DeviceComboBox.ItemsSource = _config.Devices;
 
         if (_config.Devices.Count == 0)
         {
-            SetStatus("No devices found yet. Connect a display, run the app once so it's discovered, then reopen this window.");
+            SetStatus("No devices found yet. Connect a display and click Refresh.");
             SetToolbarEnabled(false);
             return;
         }
 
         SetToolbarEnabled(true);
-        DeviceComboBox.SelectedIndex = 0;
+
+        var indexToSelect = previouslySelectedId is null
+            ? 0
+            : Math.Max(0, _config.Devices.FindIndex(d => d.Id == previouslySelectedId));
+        DeviceComboBox.SelectedIndex = indexToSelect;
+    }
+
+    private async void OnRefreshDevicesClick(object sender, RoutedEventArgs e)
+    {
+        RefreshDevicesButton.IsEnabled = false;
+        SetStatus("Searching for devices...");
+        try
+        {
+            var newDeviceCount = await _displayManager.RefreshDevicesAsync();
+            await LoadConfigAsync();
+
+            SetStatus(newDeviceCount switch
+            {
+                0 => "No new devices found.",
+                1 => "Found 1 new device.",
+                _ => $"Found {newDeviceCount} new devices.",
+            });
+        }
+        catch (Exception ex)
+        {
+            SetStatus("Could not search for devices: " + ex.Message);
+        }
+        finally
+        {
+            RefreshDevicesButton.IsEnabled = true;
+        }
     }
 
     private void SetToolbarEnabled(bool enabled)

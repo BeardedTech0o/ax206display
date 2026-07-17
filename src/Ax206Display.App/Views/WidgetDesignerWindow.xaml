@@ -10,6 +10,7 @@
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
             <TextBlock Text="Device:" VerticalAlignment="Center" Margin="0,0,6,0"/>
             <ComboBox x:Name="DeviceComboBox" Width="200" DisplayMemberPath="Name" SelectionChanged="OnDeviceSelectionChanged"/>
+            <Button x:Name="RefreshDevicesButton" Content="Refresh" Margin="4,0,0,0" Padding="10,4" Click="OnRefreshDevicesClick"/>
 
             <Separator Margin="14,0" Width="1"/>
 

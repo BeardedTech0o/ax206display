@@ -23,7 +23,7 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
 
     public async Task<IReadOnlyList<IAx206Transport>> DiscoverAsync(CancellationToken cancellationToken = default)
     {
-        var discovered = new List<IAx206Transport>();
+        var discovered = new List<LibUsbAx206Transport>();
 
         // Deliberately NOT disposed on the success path: disposing the
         // UsbDeviceCollection disposes every device in it (per LibUsbDotNet's
@@ -59,10 +59,41 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
             throw;
         }
 
+        DisambiguateDuplicateSerialNumbers(discovered);
         return discovered;
     }
 
-    private async Task<IAx206Transport?> TryOpenAsDisplayAsync(IUsbDevice device, CancellationToken cancellationToken)
+    /// <summary>
+    /// Some generic/clone AX206 panels burn the same fixed placeholder string
+    /// (often something that looks like a firmware build date) into every
+    /// unit's USB serial-number descriptor instead of a true per-unit serial.
+    /// Left alone, two such panels plugged in at once would collide onto the
+    /// same DeviceId and only one would ever get a config entry. When that
+    /// happens, disambiguate every colliding transport by appending its USB
+    /// port location - stable for as long as that panel stays in the same
+    /// physical port, but it does mean moving a disambiguated panel to a
+    /// different port makes it look like a new device (there's no better
+    /// identifier this hardware can offer).
+    /// </summary>
+    private void DisambiguateDuplicateSerialNumbers(List<LibUsbAx206Transport> discovered)
+    {
+        foreach (var group in discovered.GroupBy(t => t.DeviceId))
+        {
+            if (group.Count() <= 1)
+            {
+                continue;
+            }
+
+            foreach (var transport in group)
+            {
+                var disambiguated = $"{transport.DeviceId}@{transport.LocationId}";
+                LogDuplicateSerialNumber(transport.DeviceId, disambiguated);
+                transport.DeviceId = disambiguated;
+            }
+        }
+    }
+
+    private async Task<LibUsbAx206Transport?> TryOpenAsDisplayAsync(IUsbDevice device, CancellationToken cancellationToken)
     {
         try
         {
@@ -114,6 +145,9 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Rejecting USB device {VendorId:X4}:{ProductId:X4} during AX206 discovery.")]
     private partial void LogRejectedDuringProbe(Exception exception, ushort vendorId, ushort productId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Multiple AX206 displays reported the same serial number '{DeviceId}' - disambiguating by USB port as '{DisambiguatedDeviceId}'.")]
+    private partial void LogDuplicateSerialNumber(string deviceId, string disambiguatedDeviceId);
 
     private static void SafeClose(IUsbDevice device)
     {

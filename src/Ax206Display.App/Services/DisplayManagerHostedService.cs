@@ -43,6 +43,14 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
     private readonly ConcurrentDictionary<string, DeviceDisplayLoop> _loopsByDeviceId = new();
     private readonly ConcurrentDictionary<string, string?> _backgroundImagePathsByDeviceId = new();
     private readonly ConcurrentDictionary<string, int> _brightnessByDeviceId = new();
+
+    // Tracks every deviceId with a live SuperviseDeviceAsync task, for the
+    // task's entire lifetime (connected, reconnecting, or in between) - unlike
+    // _loopsByDeviceId, which only holds an entry while that device's loop is
+    // actively blitting. RefreshDevicesAsync uses this (via TryAdd, so two
+    // concurrent refreshes can't both claim the same newly-found device) to
+    // tell "already being supervised" apart from "genuinely new".
+    private readonly ConcurrentDictionary<string, byte> _supervisedDeviceIds = new();
     private CancellationTokenSource? _loopCancellation;
 
     public DisplayManagerHostedService(
@@ -59,20 +67,78 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        _loopCancellation = new CancellationTokenSource();
+
         var config = await _configService.LoadAsync(cancellationToken);
         var discovered = await DiscoverSafelyAsync(cancellationToken);
 
         if (discovered.Count == 0)
         {
             LogNoDevicesFound();
-            return;
+        }
+        else
+        {
+            var configChanged = false;
+
+            foreach (var transport in discovered)
+            {
+                var profile = config.Devices.FirstOrDefault(d => d.Id == transport.DeviceId);
+                if (profile is null)
+                {
+                    profile = await ProvisionDefaultProfileAsync(transport, cancellationToken);
+                    config = config with { Devices = [.. config.Devices, profile] };
+                    configChanged = true;
+                    LogAutoProvisioned(transport.DeviceId, profile.ScreenWidth, profile.ScreenHeight);
+                }
+
+                _supervisedDeviceIds.TryAdd(transport.DeviceId, 0);
+                _loopTasks.Add(SuperviseDeviceAsync(transport.DeviceId, transport, _loopCancellation.Token));
+            }
+
+            if (configChanged)
+            {
+                await _configService.SaveAsync(config, cancellationToken);
+            }
         }
 
-        _loopCancellation = new CancellationTokenSource();
+        // So layout edits made in the Widget Designer (or by hand-editing
+        // config.json) reach the physical display without an app restart.
+        // Started unconditionally, even with zero devices found here, so a
+        // device adopted later via RefreshDevicesAsync gets hot-reload
+        // immediately instead of needing special-casing there.
+        _loopTasks.Add(WatchConfigForChangesAsync(_loopCancellation.Token));
+    }
+
+    /// <summary>
+    /// Runs discovery again and starts supervising any display that isn't
+    /// already being handled (a genuinely new plug-in, or one this process
+    /// has never seen - <see cref="StartAsync"/> only scans once at launch).
+    /// Auto-provisions a default layout for any device with no saved profile
+    /// yet, same as StartAsync does. Returns how many new devices were
+    /// picked up, for the Widget Designer's Refresh button to report back.
+    /// Safe to call before StartAsync has found any device (i.e. the
+    /// "Connect a display and reopen this window" case): it starts
+    /// supervising immediately rather than requiring an app restart.
+    /// </summary>
+    public async Task<int> RefreshDevicesAsync(CancellationToken cancellationToken = default)
+    {
+        _loopCancellation ??= new CancellationTokenSource();
+
+        var discovered = await DiscoverSafelyAsync(cancellationToken);
+        var config = await _configService.LoadAsync(cancellationToken);
         var configChanged = false;
+        var newDeviceCount = 0;
 
         foreach (var transport in discovered)
         {
+            if (!_supervisedDeviceIds.TryAdd(transport.DeviceId, 0))
+            {
+                // Already has a live supervisor task (connected or between
+                // reconnect attempts) - this handle isn't needed.
+                transport.Dispose();
+                continue;
+            }
+
             var profile = config.Devices.FirstOrDefault(d => d.Id == transport.DeviceId);
             if (profile is null)
             {
@@ -83,6 +149,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
             }
 
             _loopTasks.Add(SuperviseDeviceAsync(transport.DeviceId, transport, _loopCancellation.Token));
+            newDeviceCount++;
         }
 
         if (configChanged)
@@ -90,9 +157,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
             await _configService.SaveAsync(config, cancellationToken);
         }
 
-        // So layout edits made in the Widget Designer (or by hand-editing
-        // config.json) reach the physical display without an app restart.
-        _loopTasks.Add(WatchConfigForChangesAsync(_loopCancellation.Token));
+        return newDeviceCount;
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -123,6 +188,22 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
     /// the device's profile is removed from config entirely.
     /// </summary>
     private async Task SuperviseDeviceAsync(string deviceId, IAx206Transport? initialTransport, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await SuperviseDeviceLoopAsync(deviceId, initialTransport, cancellationToken);
+        }
+        finally
+        {
+            // Releases this deviceId back for RefreshDevicesAsync to pick up
+            // fresh - only reached once this task exits for good (host
+            // shutdown, or the device's profile was removed from config),
+            // never on an ordinary disconnect/reconnect cycle.
+            _supervisedDeviceIds.TryRemove(deviceId, out _);
+        }
+    }
+
+    private async Task SuperviseDeviceLoopAsync(string deviceId, IAx206Transport? initialTransport, CancellationToken cancellationToken)
     {
         var transport = initialTransport;
 
