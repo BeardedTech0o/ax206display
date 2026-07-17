@@ -3,13 +3,13 @@
 
     <!--
         Palette and shapes lifted from BeardedTech0o/forge's dark theme
-        (tailwind.config.js + app.css: --surface/--surface-2/--surface-3,
-        --border-c, --text-c/--text-2, and the fluorescent-lime --accent).
+        (tailwind.config.js + app.css: the surface/surface2/surface3, borderc,
+        textc/text2, and fluorescent-lime accent CSS custom properties).
         This app doesn't have a light/dark toggle, so it's pinned to forge's
         dark palette permanently rather than porting the light tokens too.
 
         Native OS chrome this can't reach: MessageBox.Show (Win32 dialog,
-        not a WPF Window) and Microsoft.Win32.OpenFileDialog (the background-
+        not a WPF Window) and Microsoft.Win32.OpenFileDialog (the background
         image picker) both stay the system's default appearance - WPF has no
         supported way to skin either one.
     -->
