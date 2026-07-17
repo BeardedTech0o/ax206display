@@ -4,8 +4,11 @@
         Title="Ax206Display - Integrations"
         Height="680" Width="520"
         MinHeight="560" MinWidth="480"
-        WindowStartupLocation="CenterScreen">
-    <TabControl Margin="12">
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource SurfaceBrush}"
+        Foreground="{StaticResource TextBrush}"
+        FontFamily="{StaticResource AppFontFamily}">
+    <TabControl Margin="12" Background="{StaticResource SurfaceBrush}">
         <TabItem Header="Proxmox">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="8">

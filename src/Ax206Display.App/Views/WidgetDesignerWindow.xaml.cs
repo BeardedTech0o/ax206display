@@ -50,6 +50,7 @@ public partial class WidgetDesignerWindow : Window
     public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider, ProxmoxGuestDirectory proxmoxGuestDirectory, DisplayManagerHostedService displayManager)
     {
         InitializeComponent();
+        Theme.DarkTitleBar.Apply(this);
         _configService = configService;
         _dataProvider = dataProvider;
         _proxmoxGuestDirectory = proxmoxGuestDirectory;
@@ -183,7 +184,18 @@ public partial class WidgetDesignerWindow : Window
             SizeToContent = SizeToContent.WidthAndHeight,
             ResizeMode = ResizeMode.NoResize,
             ShowInTaskbar = false,
+            // Explicit rather than relying on ForgeTheme.xaml's implicit
+            // Window style - a plain "new Window()" is exactly type Window,
+            // not a subclass, so implicit TargetType="Window" resolution
+            // should apply automatically, but WidgetDesignerWindow/
+            // IntegrationsWindow (subclasses of Window) were observed NOT
+            // picking up that implicit style, so this is set explicitly
+            // here too rather than trusting it.
+            Background = Background,
+            Foreground = Foreground,
+            FontFamily = FontFamily,
         };
+        Theme.DarkTitleBar.Apply(dialog);
 
         okButton.Click += (_, _) => dialog.DialogResult = true;
         textBox.Loaded += (_, _) => textBox.Focus();

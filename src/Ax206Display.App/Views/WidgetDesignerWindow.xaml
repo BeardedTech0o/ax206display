@@ -5,8 +5,11 @@
         Title="Ax206Display - Widget Designer"
         Height="640" Width="960"
         MinHeight="480" MinWidth="720"
-        WindowStartupLocation="CenterScreen">
-    <DockPanel Margin="10">
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource SurfaceBrush}"
+        Foreground="{StaticResource TextBrush}"
+        FontFamily="{StaticResource AppFontFamily}">
+    <DockPanel Margin="10" Background="{StaticResource SurfaceBrush}">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
             <TextBlock Text="Device:" VerticalAlignment="Center" Margin="0,0,6,0"/>
             <ComboBox x:Name="DeviceComboBox" Width="200" DisplayMemberPath="Name" SelectionChanged="OnDeviceSelectionChanged"/>
