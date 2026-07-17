@@ -79,6 +79,7 @@ public partial class WidgetDesignerWindow : Window
         {
             SetStatus("No devices found yet. Connect a display and click Refresh.");
             SetToolbarEnabled(false);
+            RemoveDeviceButton.IsEnabled = false;
             return;
         }
 
@@ -116,6 +117,51 @@ public partial class WidgetDesignerWindow : Window
         }
     }
 
+    /// <summary>
+    /// Deletes the selected device's saved profile (layout, background,
+    /// brightness) from config - the only GUI way to clear out a stale entry,
+    /// e.g. one left behind by a serial-number collision fix that changed how
+    /// an already-known device's ID is computed. Confirmed first since a
+    /// saved layout can't be recovered once removed. If the physical display
+    /// is still plugged in, it reappears as a "new" device (fresh default
+    /// layout) the next time it's discovered - config has no way to tell
+    /// "unplugged for good" from "temporarily disconnected".
+    /// </summary>
+    private async void OnRemoveDeviceClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedDevice is null)
+        {
+            return;
+        }
+
+        var confirmed = MessageBox.Show(
+            $"Remove '{_selectedDevice.Name}' and its saved layout? This can't be undone.",
+            "Remove Device",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning) == MessageBoxResult.Yes;
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        RemoveDeviceButton.IsEnabled = false;
+        try
+        {
+            var freshConfig = await _configService.LoadAsync();
+            var updatedDevices = freshConfig.Devices.Where(d => d.Id != _selectedDevice.Id).ToList();
+            await _configService.SaveAsync(freshConfig with { Devices = updatedDevices });
+
+            _selectedDevice = null;
+            await LoadConfigAsync();
+        }
+        catch (Exception ex)
+        {
+            SetStatus("Could not remove device: " + ex.Message);
+            RemoveDeviceButton.IsEnabled = true;
+        }
+    }
+
     private void SetToolbarEnabled(bool enabled)
     {
         DeviceComboBox.IsEnabled = enabled;
@@ -144,6 +190,7 @@ public partial class WidgetDesignerWindow : Window
         _selectedDevice = device;
         _selectedItem = null;
         SaveButton.IsEnabled = false;
+        RemoveDeviceButton.IsEnabled = true;
 
         _items.Clear();
         _items.AddRange(device.Widgets.Select(WidgetDesignItem.FromConfig));

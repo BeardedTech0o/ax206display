@@ -11,6 +11,7 @@
             <TextBlock Text="Device:" VerticalAlignment="Center" Margin="0,0,6,0"/>
             <ComboBox x:Name="DeviceComboBox" Width="200" DisplayMemberPath="Name" SelectionChanged="OnDeviceSelectionChanged"/>
             <Button x:Name="RefreshDevicesButton" Content="Refresh" Margin="4,0,0,0" Padding="10,4" Click="OnRefreshDevicesClick"/>
+            <Button x:Name="RemoveDeviceButton" Content="Remove Device" Margin="4,0,0,0" Padding="10,4" Click="OnRemoveDeviceClick" IsEnabled="False"/>
 
             <Separator Margin="14,0" Width="1"/>
 
