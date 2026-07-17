@@ -11,7 +11,6 @@ public class PiHoleStatsPublisherTests
         var hub = new RenderDataHub();
         var summary = new PiHoleSummary
         {
-            Status = "enabled",
             AdsBlockedToday = 1234,
             AdsPercentageToday = 12.5,
             DnsQueriesToday = 9876,

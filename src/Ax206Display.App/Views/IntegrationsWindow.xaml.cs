@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Controls;
@@ -52,11 +53,14 @@ public partial class IntegrationsWindow : Window
                 SetProxmoxStatus("Configured. Leave the password blank to keep the saved one.");
             }
 
-            if (config.Integrations.FirstOrDefault(i => i.Kind == PiHoleKind) is { } pihole)
+            if (config.Integrations.FirstOrDefault(i => i.Kind == PiHoleKind) is { } pihole
+                && Uri.TryCreate(pihole.BaseUrl, UriKind.Absolute, out var piholeUri))
             {
-                PiHoleUrlTextBox.Text = pihole.BaseUrl;
+                PiHoleHostTextBox.Text = piholeUri.Host;
+                PiHolePortTextBox.Text = piholeUri.Port.ToString(CultureInfo.InvariantCulture);
+                PiHoleUseHttpsCheckBox.IsChecked = piholeUri.Scheme == Uri.UriSchemeHttps;
                 PiHoleThumbprintTextBox.Text = pihole.PinnedCertificateSha256Thumbprint ?? string.Empty;
-                SetPiHoleStatus("Configured. Leave the token blank to keep the saved one.");
+                SetPiHoleStatus("Configured. Leave the app password blank to keep the saved one.");
             }
 
             if (config.Integrations.FirstOrDefault(i => i.Kind == UniFiKind) is { } unifi)
@@ -134,22 +138,30 @@ public partial class IntegrationsWindow : Window
         SetPiHoleStatus("Testing...");
         try
         {
-            var baseUrl = PiHoleUrlTextBox.Text.Trim();
+            var host = PiHoleHostTextBox.Text.Trim();
             var thumbprint = string.IsNullOrWhiteSpace(PiHoleThumbprintTextBox.Text) ? null : PiHoleThumbprintTextBox.Text.Trim();
 
-            if (string.IsNullOrEmpty(baseUrl))
+            if (string.IsNullOrEmpty(host))
             {
-                SetPiHoleStatus("Host URL is required.");
+                SetPiHoleStatus("Host is required.");
                 return;
             }
+
+            if (!int.TryParse(PiHolePortTextBox.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var port) || port is < 1 or > 65535)
+            {
+                SetPiHoleStatus("Port must be a number between 1 and 65535.");
+                return;
+            }
+
+            var baseUrl = BuildPiHoleBaseUrl();
 
             var config = await _configService.LoadAsync();
             var existing = config.Integrations.FirstOrDefault(i => i.Kind == PiHoleKind);
 
-            var token = await ResolveSecretAsync(PiHoleTokenBox.Password, existing);
-            if (string.IsNullOrEmpty(token))
+            var appPassword = await ResolveSecretAsync(PiHoleTokenBox.Password, existing);
+            if (string.IsNullOrEmpty(appPassword))
             {
-                SetPiHoleStatus("API token is required.");
+                SetPiHoleStatus("App password is required.");
                 return;
             }
 
@@ -166,12 +178,13 @@ public partial class IntegrationsWindow : Window
             };
 
             using var httpClient = IntegrationHttpClientFactory.Create(testConfig, enableCookies: false);
-            var client = new PiHoleClient(httpClient, token);
+            var client = new PiHoleClient(httpClient);
+            await client.LoginAsync(appPassword);
             var summary = await client.GetSummaryAsync();
 
-            await SaveIntegrationAsync(config, testConfig, secretKey, token);
+            await SaveIntegrationAsync(config, testConfig, secretKey, appPassword);
 
-            SetPiHoleStatus($"Connected - status: {summary.Status}. Saved.");
+            SetPiHoleStatus($"Connected - {summary.DnsQueriesToday} DNS queries today, {summary.AdsBlockedToday} blocked. Saved.");
         }
         catch (Exception ex)
         {
@@ -317,7 +330,14 @@ public partial class IntegrationsWindow : Window
 
     private async void OnPiHoleDetectCertificateClick(object sender, RoutedEventArgs e)
     {
-        await DetectCertificateAsync(PiHoleUrlTextBox.Text, PiHoleThumbprintTextBox, SetPiHoleStatus);
+        await DetectCertificateAsync(BuildPiHoleBaseUrl(), PiHoleThumbprintTextBox, SetPiHoleStatus);
+    }
+
+    /// <summary>Reconstructs a full base URL from the separate Host/Port/HTTPS fields, since those replaced a single free-text URL box after a user got tripped up entering it wrong.</summary>
+    private string BuildPiHoleBaseUrl()
+    {
+        var scheme = PiHoleUseHttpsCheckBox.IsChecked == true ? "https" : "http";
+        return $"{scheme}://{PiHoleHostTextBox.Text.Trim()}:{PiHolePortTextBox.Text.Trim()}";
     }
 
     private async void OnUniFiDetectCertificateClick(object sender, RoutedEventArgs e)

@@ -8,51 +8,80 @@ namespace Ax206Display.Tests.DataSources;
 public class PiHoleClientTests
 {
     [Fact]
-    public async Task GetSummaryAsync_SendsTokenAndParsesSummaryRaw()
+    public async Task LoginAsync_PostsToAuthEndpoint()
     {
         string? capturedPath = null;
         var handler = new FakeHttpMessageHandler(request =>
         {
-            capturedPath = request.RequestUri!.PathAndQuery;
-            const string json = """
-                {
-                  "status": "enabled",
-                  "ads_blocked_today": 1234,
-                  "ads_percentage_today": 12.5,
-                  "dns_queries_today": 9876
-                }
-                """;
+            capturedPath = request.RequestUri!.AbsolutePath;
+            const string json = """{ "session": { "valid": true, "sid": "session-abc", "message": "password correct" } }""";
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
         });
-        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://pi.hole") };
-        var client = new PiHoleClient(httpClient, "secret-token");
+        var client = CreateClient(handler);
+
+        await client.LoginAsync("app-password");
+
+        Assert.Equal("/api/auth", capturedPath);
+    }
+
+    [Fact]
+    public async Task LoginAsync_NoSidInResponse_ThrowsWithTheServerMessage()
+    {
+        var handler = new FakeHttpMessageHandler(_ =>
+        {
+            const string json = """{ "session": { "valid": false, "sid": null, "message": "incorrect password" } }""";
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+        });
+        var client = CreateClient(handler);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => client.LoginAsync("wrong-password"));
+        Assert.Contains("incorrect password", ex.Message);
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_WithoutLoggingIn_Throws()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetSummaryAsync());
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_ForwardsSessionIdAndParsesQueryCounts()
+    {
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/auth")
+            {
+                const string loginJson = """{ "session": { "valid": true, "sid": "session-xyz", "message": "password correct" } }""";
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(loginJson, Encoding.UTF8, "application/json") };
+            }
+
+            Assert.Equal("/api/stats/summary", request.RequestUri!.AbsolutePath);
+            Assert.True(request.Headers.TryGetValues("X-FTL-SID", out var values));
+            Assert.Equal("session-xyz", values!.Single());
+
+            const string summaryJson = """
+                {
+                  "queries": { "total": 9876, "blocked": 1234, "percent_blocked": 12.5 }
+                }
+                """;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(summaryJson, Encoding.UTF8, "application/json") };
+        });
+        var client = CreateClient(handler);
+        await client.LoginAsync("app-password");
 
         var summary = await client.GetSummaryAsync();
 
-        Assert.Contains("summaryRaw", capturedPath);
-        Assert.Contains("auth=secret-token", capturedPath);
-        Assert.Equal("enabled", summary.Status);
         Assert.Equal(1234, summary.AdsBlockedToday);
         Assert.Equal(12.5, summary.AdsPercentageToday);
         Assert.Equal(9876, summary.DnsQueriesToday);
     }
 
-    [Fact]
-    public async Task GetSummaryAsync_UrlEncodesTheToken()
+    private static PiHoleClient CreateClient(FakeHttpMessageHandler handler)
     {
-        string? capturedPath = null;
-        var handler = new FakeHttpMessageHandler(request =>
-        {
-            capturedPath = request.RequestUri!.PathAndQuery;
-            const string json = """{ "status": "enabled", "ads_blocked_today": 0, "ads_percentage_today": 0, "dns_queries_today": 0 }""";
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
-        });
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://pi.hole") };
-        var client = new PiHoleClient(httpClient, "a b&c");
-
-        await client.GetSummaryAsync();
-
-        Assert.DoesNotContain("a b&c", capturedPath);
-        Assert.Contains(Uri.EscapeDataString("a b&c"), capturedPath);
+        return new PiHoleClient(httpClient);
     }
 }

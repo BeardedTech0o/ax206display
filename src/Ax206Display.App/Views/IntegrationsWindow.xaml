@@ -48,10 +48,23 @@
                     <TextBlock Text="Pi-hole" FontWeight="Bold" FontSize="16" Margin="0,0,0,8"/>
                     <TextBlock Text="Shows ads blocked today, DNS queries today, and block percentage as a &quot;System Stat&quot; widget reading." TextWrapping="Wrap" Foreground="{StaticResource Text2Brush}" Margin="0,0,0,10"/>
 
-                    <TextBlock Text="Host URL (e.g. http://pi.hole or http://192.168.1.10)" Margin="0,0,0,2"/>
-                    <TextBox x:Name="PiHoleUrlTextBox" Margin="0,0,0,8"/>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="90"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                            <TextBlock Text="Host (e.g. pi.hole or 192.168.1.42 - no http:// or port)" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                            <TextBox x:Name="PiHoleHostTextBox"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Port" Margin="0,0,0,2"/>
+                            <TextBox x:Name="PiHolePortTextBox" Text="80"/>
+                        </StackPanel>
+                    </Grid>
+                    <CheckBox x:Name="PiHoleUseHttpsCheckBox" Content="Use HTTPS" Margin="0,0,0,8"/>
 
-                    <TextBlock Text="API token (Settings -&gt; API / Web interface -&gt; Show API token, leave blank to keep the saved one)" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                    <TextBlock Text="App password (Settings -&gt; API -&gt; App Passwords -&gt; Configure app password, leave blank to keep the saved one)" TextWrapping="Wrap" Margin="0,0,0,2"/>
                     <PasswordBox x:Name="PiHoleTokenBox" Margin="0,0,0,8"/>
 
                     <TextBlock Text="Pinned certificate thumbprint (optional - only if using HTTPS with a self-signed certificate)" TextWrapping="Wrap" Margin="0,0,0,2"/>

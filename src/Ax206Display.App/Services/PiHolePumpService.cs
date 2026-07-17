@@ -1,3 +1,4 @@
+using Ax206Display.Config.Models;
 using Ax206Display.Config.Secrets;
 using Ax206Display.Config.Services;
 using Ax206Display.DataSources.Http;
@@ -11,9 +12,11 @@ namespace Ax206Display.App.Services;
 /// <summary>
 /// Polls a configured Pi-hole integration (Kind == "pihole" in
 /// AppConfig.Integrations) and publishes its summary stats into the
-/// RenderDataHub. Unlike Proxmox, Pi-hole's v5 API has no login/session
-/// step - every request just carries the API token - so there's no
-/// reconnect-on-expiry logic needed here. Idles quietly if not configured.
+/// RenderDataHub. Pi-hole v6 replaced v5's stateless per-request API token
+/// with a session login (an "app password" traded for a session id), so
+/// this logs in once and reuses that session, re-authenticating
+/// automatically if a poll fails (e.g. the session expired) - same shape as
+/// ProxmoxPumpService/UniFiPumpService. Idles quietly if not configured yet.
 /// </summary>
 public sealed partial class PiHolePumpService : BackgroundService
 {
@@ -24,6 +27,9 @@ public sealed partial class PiHolePumpService : BackgroundService
     private readonly SecretStore _secretStore;
     private readonly RenderDataHub _hub;
     private readonly ILogger<PiHolePumpService> _logger;
+
+    private IPiHoleClient? _client;
+    private string? _loggedInIntegrationId;
 
     public PiHolePumpService(ConfigService configService, SecretStore secretStore, RenderDataHub hub, ILogger<PiHolePumpService> logger)
     {
@@ -46,6 +52,10 @@ public sealed partial class PiHolePumpService : BackgroundService
             catch (Exception ex)
             {
                 LogPollFailed(ex);
+                // Force a fresh login attempt next time - the failure may
+                // have been an expired/rejected session id.
+                _client = null;
+                _loggedInIntegrationId = null;
             }
 
             try
@@ -63,29 +73,53 @@ public sealed partial class PiHolePumpService : BackgroundService
     {
         var config = await _configService.LoadAsync(cancellationToken);
         var integration = config.Integrations.FirstOrDefault(i => i.Kind == IntegrationKind);
-        if (integration is null || string.IsNullOrEmpty(integration.SecretKey))
+        if (integration is null)
         {
+            _client = null;
+            _loggedInIntegrationId = null;
             return;
+        }
+
+        if (_client is null || _loggedInIntegrationId != integration.Id)
+        {
+            _client = await LogInAsync(integration, cancellationToken);
+            _loggedInIntegrationId = _client is null ? null : integration.Id;
+
+            if (_client is null)
+            {
+                return;
+            }
+        }
+
+        var summary = await _client.GetSummaryAsync(cancellationToken);
+        PiHoleStatsPublisher.Publish(summary, _hub.Publish);
+    }
+
+    private async Task<IPiHoleClient?> LogInAsync(IntegrationConfig integration, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(integration.SecretKey))
+        {
+            LogMissingCredentials(integration.Id);
+            return null;
         }
 
         await _secretStore.LoadAsync(cancellationToken);
-        var apiToken = _secretStore.GetSecret(integration.SecretKey);
-        if (string.IsNullOrEmpty(apiToken))
+        var appPassword = _secretStore.GetSecret(integration.SecretKey);
+        if (string.IsNullOrEmpty(appPassword))
         {
-            LogMissingToken(integration.Id);
-            return;
+            LogMissingCredentials(integration.Id);
+            return null;
         }
 
-        using var httpClient = IntegrationHttpClientFactory.Create(integration, enableCookies: false);
-        var client = new PiHoleClient(httpClient, apiToken);
-
-        var summary = await client.GetSummaryAsync(cancellationToken);
-        PiHoleStatsPublisher.Publish(summary, _hub.Publish);
+        var httpClient = IntegrationHttpClientFactory.Create(integration, enableCookies: false);
+        var client = new PiHoleClient(httpClient);
+        await client.LoginAsync(appPassword, cancellationToken);
+        return client;
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Pi-hole poll failed; will retry.")]
     private partial void LogPollFailed(Exception exception);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Pi-hole integration {IntegrationId} is missing its API token; skipping.")]
-    private partial void LogMissingToken(string integrationId);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Pi-hole integration {IntegrationId} is missing its app password; skipping.")]
+    private partial void LogMissingCredentials(string integrationId);
 }
