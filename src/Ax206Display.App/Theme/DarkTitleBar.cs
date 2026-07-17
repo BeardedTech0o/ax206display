@@ -26,10 +26,10 @@ internal static class DarkTitleBar
         {
             var hwnd = new WindowInteropHelper(window).Handle;
             var useDarkMode = 1;
-            // Best-effort: an older Windows build just ignores the call
-            // (returns a failure HRESULT) rather than throwing, so there's
-            // nothing worth handling here.
-            DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref useDarkMode, sizeof(int));
+            // Best-effort: an older Windows build just returns a failure
+            // HRESULT here rather than throwing, and there's nothing more
+            // useful to do with it than let the title bar stay light.
+            _ = DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref useDarkMode, sizeof(int));
         };
     }
 }
