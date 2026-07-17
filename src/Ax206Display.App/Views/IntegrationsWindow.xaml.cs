@@ -138,7 +138,7 @@ public partial class IntegrationsWindow : Window
         SetPiHoleStatus("Testing...");
         try
         {
-            var host = PiHoleHostTextBox.Text.Trim();
+            var host = HostNormalizer.Normalize(PiHoleHostTextBox.Text);
             var thumbprint = string.IsNullOrWhiteSpace(PiHoleThumbprintTextBox.Text) ? null : PiHoleThumbprintTextBox.Text.Trim();
 
             if (string.IsNullOrEmpty(host))
@@ -146,6 +146,12 @@ public partial class IntegrationsWindow : Window
                 SetPiHoleStatus("Host is required.");
                 return;
             }
+
+            // The field was typed as just a hostname/IP but came back
+            // different after stripping a scheme/port/path the user pasted
+            // in anyway (a natural mistake - URLs normally look like that) -
+            // reflect what will actually be used back into the box.
+            PiHoleHostTextBox.Text = host;
 
             if (!int.TryParse(PiHolePortTextBox.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var port) || port is < 1 or > 65535)
             {
@@ -337,7 +343,7 @@ public partial class IntegrationsWindow : Window
     private string BuildPiHoleBaseUrl()
     {
         var scheme = PiHoleUseHttpsCheckBox.IsChecked == true ? "https" : "http";
-        return $"{scheme}://{PiHoleHostTextBox.Text.Trim()}:{PiHolePortTextBox.Text.Trim()}";
+        return $"{scheme}://{HostNormalizer.Normalize(PiHoleHostTextBox.Text)}:{PiHolePortTextBox.Text.Trim()}";
     }
 
     private async void OnUniFiDetectCertificateClick(object sender, RoutedEventArgs e)
