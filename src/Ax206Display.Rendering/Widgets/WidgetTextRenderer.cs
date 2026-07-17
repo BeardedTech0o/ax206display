@@ -17,13 +17,21 @@ internal static class WidgetTextRenderer
         var style = fontStyle ?? WidgetFontStyle.Default;
         var typeface = ResolveTypeface(style);
 
-        using var font = new SKFont(typeface, height * HeightFraction * style.SizeScale);
+        // A fixed pixel size is honored exactly (that's its whole point);
+        // otherwise size from the box height with the legacy scale multiplier.
+        var baseSize = style.FixedSizePixels ?? height * HeightFraction * style.SizeScale;
+
+        using var font = new SKFont(typeface, baseSize);
         using var paint = new SKPaint { Color = color, IsAntialias = true };
 
         var textWidth = font.MeasureText(text, paint);
 
+        // Auto-fitted text is still shrunk to the widget's width so nothing
+        // bleeds outside its box. Fixed-size text deliberately skips this -
+        // "24px" means 24px even if the box is narrow (the canvas clip in
+        // FrameCompositor keeps any overflow inside the widget bounds).
         var maxTextWidth = width * MaxWidthFraction;
-        if (textWidth > maxTextWidth)
+        if (style.FixedSizePixels is null && textWidth > maxTextWidth)
         {
             font.Size *= maxTextWidth / textWidth;
             textWidth = font.MeasureText(text, paint);

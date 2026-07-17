@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Ax206Display.Config.Models;
 using SkiaSharp;
 
@@ -62,6 +63,37 @@ public static class WidgetFactory
             FontFamily: config.Settings["fontFamily"]?.GetValue<string>(),
             Bold: config.Settings["bold"]?.GetValue<bool>() ?? false,
             Italic: config.Settings["italic"]?.GetValue<bool>() ?? false,
-            SizeScale: (float)(config.Settings["fontScale"]?.GetValue<double>() ?? 1.0));
+            // fontScale is the legacy relative-size setting - still read so
+            // layouts saved before fontSizePx existed render unchanged.
+            SizeScale: (float)(ReadDouble(config.Settings["fontScale"]) ?? 1.0),
+            FixedSizePixels: (float?)ReadDouble(config.Settings["fontSizePx"]));
+    }
+
+    /// <summary>
+    /// Reads a numeric setting whether the node came from parsed JSON or was
+    /// assigned in memory. GetValue&lt;double&gt;() alone throws for an
+    /// in-memory JsonValue created from an int (no implicit numeric
+    /// conversion) - which is exactly what the designer's live preview
+    /// produces between assigning a setting and saving it to disk.
+    /// </summary>
+    private static double? ReadDouble(JsonNode? node)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        var value = node.AsValue();
+        if (value.TryGetValue<double>(out var asDouble))
+        {
+            return asDouble;
+        }
+
+        if (value.TryGetValue<int>(out var asInt))
+        {
+            return asInt;
+        }
+
+        return null;
     }
 }

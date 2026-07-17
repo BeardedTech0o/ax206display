@@ -44,6 +44,8 @@ public partial class WidgetDesignerWindow : Window
     private SKBitmap? _backgroundImage;
     private string? _backgroundImagePath;
     private bool _showGrid;
+    private System.Windows.Shapes.Line? _verticalGuideLine;
+    private System.Windows.Shapes.Line? _horizontalGuideLine;
 
     public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider, ProxmoxGuestDirectory proxmoxGuestDirectory, DisplayManagerHostedService displayManager)
     {
@@ -79,6 +81,7 @@ public partial class WidgetDesignerWindow : Window
         {
             SetStatus("No devices found yet. Connect a display and click Refresh.");
             SetToolbarEnabled(false);
+            RenameDeviceButton.IsEnabled = false;
             RemoveDeviceButton.IsEnabled = false;
             return;
         }
@@ -115,6 +118,77 @@ public partial class WidgetDesignerWindow : Window
         {
             RefreshDevicesButton.IsEnabled = true;
         }
+    }
+
+    private async void OnRenameDeviceClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedDevice is null)
+        {
+            return;
+        }
+
+        var newName = PromptForText("Rename Display", "New name:", _selectedDevice.Name);
+        if (string.IsNullOrWhiteSpace(newName) || newName == _selectedDevice.Name)
+        {
+            return;
+        }
+
+        try
+        {
+            var freshConfig = await _configService.LoadAsync();
+            var index = freshConfig.Devices.FindIndex(d => d.Id == _selectedDevice.Id);
+            if (index < 0)
+            {
+                SetStatus("This device is no longer in the config - nothing was renamed.");
+                return;
+            }
+
+            var updatedDevices = new List<DeviceProfileConfig>(freshConfig.Devices);
+            updatedDevices[index] = updatedDevices[index] with { Name = newName.Trim() };
+            await _configService.SaveAsync(freshConfig with { Devices = updatedDevices });
+
+            await LoadConfigAsync();
+            SetStatus("Renamed.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus("Could not rename: " + ex.Message);
+        }
+    }
+
+    /// <summary>Minimal modal text-input dialog (WPF has no built-in one). Returns null on cancel.</summary>
+    private string? PromptForText(string title, string label, string initialValue)
+    {
+        var textBox = new TextBox { Text = initialValue, Margin = new Thickness(0, 4, 0, 12), MinWidth = 260 };
+        textBox.SelectAll();
+
+        var okButton = new Button { Content = "OK", Padding = new Thickness(16, 4, 16, 4), Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancelButton = new Button { Content = "Cancel", Padding = new Thickness(16, 4, 16, 4), IsCancel = true };
+
+        var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        buttonRow.Children.Add(okButton);
+        buttonRow.Children.Add(cancelButton);
+
+        var rootPanel = new StackPanel { Margin = new Thickness(12) };
+        rootPanel.Children.Add(new TextBlock { Text = label });
+        rootPanel.Children.Add(textBox);
+        rootPanel.Children.Add(buttonRow);
+
+        var dialog = new Window
+        {
+            Title = title,
+            Content = rootPanel,
+            Owner = this,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false,
+        };
+
+        okButton.Click += (_, _) => dialog.DialogResult = true;
+        textBox.Loaded += (_, _) => textBox.Focus();
+
+        return dialog.ShowDialog() == true ? textBox.Text : null;
     }
 
     /// <summary>
@@ -190,6 +264,7 @@ public partial class WidgetDesignerWindow : Window
         _selectedDevice = device;
         _selectedItem = null;
         SaveButton.IsEnabled = false;
+        RenameDeviceButton.IsEnabled = true;
         RemoveDeviceButton.IsEnabled = true;
 
         _items.Clear();
@@ -214,6 +289,8 @@ public partial class WidgetDesignerWindow : Window
     {
         OverlayCanvas.Children.Clear();
         _overlays.Clear();
+        _verticalGuideLine = null;
+        _horizontalGuideLine = null;
         OverlayCanvas.Width = DesignerRoot.Width;
         OverlayCanvas.Height = DesignerRoot.Height;
 
@@ -225,9 +302,74 @@ public partial class WidgetDesignerWindow : Window
 
     private void AddOverlayFor(WidgetDesignItem item)
     {
-        var overlay = new DesignerWidgetOverlay(item, OverlayCanvas, (int)DesignerRoot.Width, (int)DesignerRoot.Height, SelectItem, OnItemChanged);
+        var overlay = new DesignerWidgetOverlay(
+            item,
+            OverlayCanvas,
+            (int)DesignerRoot.Width,
+            (int)DesignerRoot.Height,
+            SelectItem,
+            OnItemChanged,
+            () => GetSnapTargetsExcept(item),
+            ShowSnapGuides);
         _overlays[item] = overlay;
         OverlayCanvas.Children.Add(overlay);
+    }
+
+    private List<SnapBox> GetSnapTargetsExcept(WidgetDesignItem draggedItem)
+    {
+        return _items
+            .Where(i => !ReferenceEquals(i, draggedItem))
+            .Select(i => new SnapBox(i.X, i.Y, i.Width, i.Height))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Draws Canva-style alignment guides while a widget is being dragged:
+    /// a full-height line at the snapped x and/or a full-width line at the
+    /// snapped y, cleared (both null) when the drag ends or nothing snaps.
+    /// </summary>
+    private void ShowSnapGuides(int? verticalX, int? horizontalY)
+    {
+        if (_verticalGuideLine is not null)
+        {
+            OverlayCanvas.Children.Remove(_verticalGuideLine);
+            _verticalGuideLine = null;
+        }
+
+        if (_horizontalGuideLine is not null)
+        {
+            OverlayCanvas.Children.Remove(_horizontalGuideLine);
+            _horizontalGuideLine = null;
+        }
+
+        if (verticalX is { } x)
+        {
+            _verticalGuideLine = MakeGuideLine(x, 0, x, DesignerRoot.Height);
+            OverlayCanvas.Children.Add(_verticalGuideLine);
+        }
+
+        if (horizontalY is { } y)
+        {
+            _horizontalGuideLine = MakeGuideLine(0, y, DesignerRoot.Width, y);
+            OverlayCanvas.Children.Add(_horizontalGuideLine);
+        }
+    }
+
+    private static System.Windows.Shapes.Line MakeGuideLine(double x1, double y1, double x2, double y2)
+    {
+        var line = new System.Windows.Shapes.Line
+        {
+            X1 = x1,
+            Y1 = y1,
+            X2 = x2,
+            Y2 = y2,
+            Stroke = Brushes.Magenta,
+            StrokeThickness = 1,
+            StrokeDashArray = new DoubleCollection { 3, 2 },
+            IsHitTestVisible = false,
+        };
+        Panel.SetZIndex(line, int.MaxValue);
+        return line;
     }
 
     private void SelectItem(WidgetDesignItem item)
@@ -566,22 +708,27 @@ public partial class WidgetDesignerWindow : Window
 
         PropertyPanel.Children.Add(new TextBlock { Text = "Size", Margin = new Thickness(0, 6, 0, 2) });
 
-        var currentScale = item.GetDoubleSetting("fontScale", WidgetCatalog.DefaultFontScale);
-        var currentSizeOption = WidgetCatalog.FontSizes.FirstOrDefault(s => Math.Abs(s.Scale - currentScale) < 0.001)
-            ?? WidgetCatalog.FontSizes.First(s => s.Scale == WidgetCatalog.DefaultFontScale);
+        // A layout saved before pixel sizes existed may carry the old
+        // relative "fontScale" instead of "fontSizePx" - it still renders
+        // scaled (WidgetFactory keeps reading it) but shows here as Auto
+        // until the user picks an explicit size, which replaces it.
+        var currentPixels = item.GetDoubleSetting("fontSizePx", 0);
+        var currentSizeOption = WidgetCatalog.FontSizes.FirstOrDefault(s => s.Pixels is { } px && Math.Abs(px - currentPixels) < 0.001)
+            ?? WidgetCatalog.FontSizes[0];
 
         var sizeComboBox = new ComboBox { ItemsSource = WidgetCatalog.FontSizes, DisplayMemberPath = "DisplayName", SelectedItem = currentSizeOption };
         sizeComboBox.SelectionChanged += (_, _) =>
         {
             if (sizeComboBox.SelectedItem is WidgetCatalog.FontSizeOption option)
             {
-                if (option.Scale == WidgetCatalog.DefaultFontScale)
+                item.Settings.Remove("fontScale");
+                if (option.Pixels is { } pixels)
                 {
-                    item.Settings.Remove("fontScale");
+                    item.SetDoubleSetting("fontSizePx", pixels);
                 }
                 else
                 {
-                    item.SetDoubleSetting("fontScale", option.Scale);
+                    item.Settings.Remove("fontSizePx");
                 }
 
                 OnItemChanged();

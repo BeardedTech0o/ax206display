@@ -23,6 +23,8 @@ internal sealed class DesignerWidgetOverlay : Grid
     private readonly int _canvasHeight;
     private readonly Action<WidgetDesignItem> _onSelect;
     private readonly Action _onChanged;
+    private readonly Func<IReadOnlyList<SnapBox>> _getSnapTargets;
+    private readonly Action<int?, int?> _showSnapGuides;
 
     private readonly Border _hitBorder;
     private readonly List<Border> _handles = [];
@@ -37,13 +39,17 @@ internal sealed class DesignerWidgetOverlay : Grid
 
     public bool IsSelected { get; private set; }
 
+    /// <param name="getSnapTargets">The other widgets' boxes to snap against - queried at drag time so it's always current.</param>
+    /// <param name="showSnapGuides">Draws (or, with two nulls, clears) the vertical/horizontal alignment guide lines.</param>
     public DesignerWidgetOverlay(
         WidgetDesignItem item,
         Canvas rootCanvas,
         int canvasWidth,
         int canvasHeight,
         Action<WidgetDesignItem> onSelect,
-        Action onChanged)
+        Action onChanged,
+        Func<IReadOnlyList<SnapBox>> getSnapTargets,
+        Action<int?, int?> showSnapGuides)
     {
         _item = item;
         _rootCanvas = rootCanvas;
@@ -51,6 +57,8 @@ internal sealed class DesignerWidgetOverlay : Grid
         _canvasHeight = canvasHeight;
         _onSelect = onSelect;
         _onChanged = onChanged;
+        _getSnapTargets = getSnapTargets;
+        _showSnapGuides = showSnapGuides;
 
         _hitBorder = new Border
         {
@@ -137,8 +145,13 @@ internal sealed class DesignerWidgetOverlay : Grid
         var dx = (int)Math.Round(pos.X - _dragStart.X);
         var dy = (int)Math.Round(pos.Y - _dragStart.Y);
 
-        var newX = Math.Clamp(_dragOriginX + dx, 0, Math.Max(0, _canvasWidth - _item.Width));
-        var newY = Math.Clamp(_dragOriginY + dy, 0, Math.Max(0, _canvasHeight - _item.Height));
+        var proposed = new SnapBox(_dragOriginX + dx, _dragOriginY + dy, _item.Width, _item.Height);
+        var snapped = DesignerSnapEngine.SnapMove(proposed, _getSnapTargets(), _canvasWidth, _canvasHeight);
+        _showSnapGuides(snapped.VerticalGuide, snapped.HorizontalGuide);
+
+        // Clamp after snapping so a snap can never push the widget off-canvas.
+        var newX = Math.Clamp(snapped.X, 0, Math.Max(0, _canvasWidth - _item.Width));
+        var newY = Math.Clamp(snapped.Y, 0, Math.Max(0, _canvasHeight - _item.Height));
 
         _item.X = newX;
         _item.Y = newY;
@@ -151,6 +164,7 @@ internal sealed class DesignerWidgetOverlay : Grid
     {
         _isDraggingBody = false;
         _hitBorder.ReleaseMouseCapture();
+        _showSnapGuides(null, null);
     }
 
     private void OnHandleMouseDown(object sender, MouseButtonEventArgs e)

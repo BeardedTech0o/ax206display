@@ -80,17 +80,21 @@ internal static class WidgetCatalog
         "Comic Sans MS",
     ];
 
-    internal sealed record FontSizeOption(string DisplayName, double Scale);
+    /// <summary>Pixels = null is "Auto": fit the text to the widget's box, the historical behavior.</summary>
+    internal sealed record FontSizeOption(string DisplayName, double? Pixels);
 
-    internal const double DefaultFontScale = 1.0;
+    internal static readonly IReadOnlyList<FontSizeOption> FontSizes = BuildFontSizes();
 
-    internal static readonly IReadOnlyList<FontSizeOption> FontSizes =
-    [
-        new("Small", 0.75),
-        new("Default", DefaultFontScale),
-        new("Large", 1.25),
-        new("Extra Large", 1.5),
-    ];
+    private static List<FontSizeOption> BuildFontSizes()
+    {
+        // Sizes are in the AX206 panel's own pixels (the canvas the widgets
+        // render onto), so "24 px" is 24 physical rows on the display.
+        int[] pixelSizes = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 64, 80, 96];
+
+        var options = new List<FontSizeOption> { new("Auto (fit to box)", null) };
+        options.AddRange(pixelSizes.Select(px => new FontSizeOption($"{px} px", px)));
+        return options;
+    }
 
     internal const string DefaultTimeFormat = "HH:mm:ss";
 
