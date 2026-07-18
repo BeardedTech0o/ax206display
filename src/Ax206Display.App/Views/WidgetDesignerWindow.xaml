@@ -51,9 +51,18 @@
         </WrapPanel>
 
         <Border DockPanel.Dock="Right" Width="240" Margin="10,0,0,0" Background="{StaticResource Surface2Brush}" BorderBrush="{StaticResource ForgeBorderBrush}" BorderThickness="1" CornerRadius="{StaticResource CardCornerRadius}" Padding="10">
-            <StackPanel x:Name="PropertyPanel">
-                <TextBlock Text="Select a widget to edit its properties, or add a new one above." TextWrapping="Wrap" Foreground="{StaticResource Text2Brush}"/>
-            </StackPanel>
+            <!--
+                A widget with many fields (the gauge's Reading/Label/Unit/
+                Decimals/Min/Max/Gauge color/Text color/Font/Size can exceed
+                this panel's fixed height, especially on a shorter window -
+                ScrollViewer keeps every field reachable instead of the
+                bottom ones being silently clipped by the Border.
+            -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="PropertyPanel">
+                    <TextBlock Text="Select a widget to edit its properties, or add a new one above." TextWrapping="Wrap" Foreground="{StaticResource Text2Brush}"/>
+                </StackPanel>
+            </ScrollViewer>
         </Border>
 
         <Border Background="#000000" BorderBrush="{StaticResource ForgeBorderBrush}" BorderThickness="1" CornerRadius="{StaticResource CardCornerRadius}">
