@@ -85,7 +85,23 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
                 var profile = config.Devices.FirstOrDefault(d => d.Id == transport.DeviceId);
                 if (profile is null)
                 {
-                    profile = await ProvisionDefaultProfileAsync(transport, cancellationToken);
+                    try
+                    {
+                        profile = await ProvisionDefaultProfileAsync(transport, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        // A transient USB failure here (e.g. GetLcdParameters
+                        // timing out) must not take down the whole host - it
+                        // would silently kill every other already-working
+                        // display along with it. Skip this device; it'll be
+                        // picked up on the next RefreshDevicesAsync or app
+                        // restart instead.
+                        LogProvisioningFailed(ex, transport.DeviceId);
+                        transport.Dispose();
+                        continue;
+                    }
+
                     config = config with { Devices = [.. config.Devices, profile] };
                     configChanged = true;
                     LogAutoProvisioned(transport.DeviceId, profile.ScreenWidth, profile.ScreenHeight);
@@ -142,7 +158,18 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
             var profile = config.Devices.FirstOrDefault(d => d.Id == transport.DeviceId);
             if (profile is null)
             {
-                profile = await ProvisionDefaultProfileAsync(transport, cancellationToken);
+                try
+                {
+                    profile = await ProvisionDefaultProfileAsync(transport, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    LogProvisioningFailed(ex, transport.DeviceId);
+                    _supervisedDeviceIds.TryRemove(transport.DeviceId, out _);
+                    transport.Dispose();
+                    continue;
+                }
+
                 config = config with { Devices = [.. config.Devices, profile] };
                 configChanged = true;
                 LogAutoProvisioned(transport.DeviceId, profile.ScreenWidth, profile.ScreenHeight);
@@ -538,6 +565,9 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Auto-provisioned a default layout for {DeviceId} ({Width}x{Height}).")]
     private partial void LogAutoProvisioned(string deviceId, int width, int height);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to auto-provision a default layout for {DeviceId}; skipping it for now.")]
+    private partial void LogProvisioningFailed(Exception exception, string deviceId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Display loop for {DeviceId} stopped unexpectedly; will try to reconnect.")]
     private partial void LogLoopFailed(Exception exception, string deviceId);

@@ -16,6 +16,8 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
     private readonly UsbContext _context = new();
     private readonly ILogger<LibUsbAx206DeviceDiscovery> _logger;
 
+    private readonly AmbiguousSerialTracker _ambiguousSerialTracker = new();
+
     public LibUsbAx206DeviceDiscovery(ILogger<LibUsbAx206DeviceDiscovery>? logger = null)
     {
         _logger = logger ?? NullLogger<LibUsbAx206DeviceDiscovery>.Instance;
@@ -73,13 +75,15 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
     /// port location - stable for as long as that panel stays in the same
     /// physical port, but it does mean moving a disambiguated panel to a
     /// different port makes it look like a new device (there's no better
-    /// identifier this hardware can offer).
+    /// identifier this hardware can offer). A serial seen colliding once
+    /// stays disambiguated in every later scan too, via
+    /// <see cref="_ambiguousSerialTracker"/> - see its doc comment for why.
     /// </summary>
     private void DisambiguateDuplicateSerialNumbers(List<LibUsbAx206Transport> discovered)
     {
         foreach (var group in discovered.GroupBy(t => t.DeviceId))
         {
-            if (group.Count() <= 1)
+            if (!_ambiguousSerialTracker.ShouldDisambiguate(group.Key, group.Count()))
             {
                 continue;
             }
