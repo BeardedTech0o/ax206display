@@ -59,6 +59,7 @@ public static class WidgetFactory
         var minValue = ReadDouble(config.Settings["minValue"]) ?? 0;
         var maxValue = ReadDouble(config.Settings["maxValue"]) ?? 100;
         var valueFontSizePx = (float?)ReadDouble(config.Settings["valueFontSizePx"]);
+        var labelGapPx = (float)(ReadDouble(config.Settings["labelGapPx"]) ?? 0);
 
         return new GaugeWidget(
             config.Id,
@@ -71,6 +72,7 @@ public static class WidgetFactory
             minValue,
             maxValue,
             valueFontSizePx,
+            labelGapPx,
             ReadColor(config, "gaugeColor"),
             ReadTextColor(config),
             ReadFontStyle(config));

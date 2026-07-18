@@ -93,6 +93,7 @@ internal static class WidgetCatalog
         "Trebuchet MS",
         "Georgia",
         "Comic Sans MS",
+        "Space Mono",
     ];
 
     /// <summary>Pixels = null is "Auto": fit the text to the widget's box, the historical behavior.</summary>

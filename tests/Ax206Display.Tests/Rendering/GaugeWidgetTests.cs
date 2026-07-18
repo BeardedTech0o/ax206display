@@ -100,6 +100,37 @@ public class GaugeWidgetTests
         Assert.True(footerHasPixels);
     }
 
+    [Fact]
+    public void Render_WithLabelGap_StillPaintsTheLabelInsteadOfThrowing()
+    {
+        var widget = new GaugeWidget("gauge", 100, 100, dataKey: "k", label: "Blocked", labelGapPx: 20f);
+        Assert.True(RenderAndCheckForNonBlackPixel(widget, new Dictionary<string, object> { ["k"] = 42.0 }));
+    }
+
+    [Fact]
+    public void Render_WithLabelGapLargerThanHeight_ClampsInsteadOfThrowing()
+    {
+        // The gap plus the footer strip could otherwise exceed Height,
+        // driving the ring's own area negative - Render clamps this rather
+        // than producing a negative-size rect or throwing. A gap this much
+        // bigger than the widget legitimately pushes the label fully off
+        // the canvas, so there's nothing left to assert on except that it
+        // didn't throw.
+        var widget = new GaugeWidget("gauge", 80, 80, dataKey: "k", label: "Blocked", labelGapPx: 1000f);
+        using var bitmap = new SKBitmap(80, 80, SKColorType.Rgb565, SKAlphaType.Opaque);
+        using var canvas = new SKCanvas(bitmap);
+
+        var context = new WidgetRenderContext { Now = DateTimeOffset.UtcNow, Data = new Dictionary<string, object> { ["k"] = 42.0 } };
+        widget.Render(canvas, context);
+    }
+
+    [Fact]
+    public void Render_WithNegativeLabelGap_ClampsToZeroInsteadOfThrowing()
+    {
+        var widget = new GaugeWidget("gauge", 80, 80, dataKey: "k", label: "Blocked", labelGapPx: -50f);
+        Assert.True(RenderAndCheckForNonBlackPixel(widget, new Dictionary<string, object> { ["k"] = 42.0 }));
+    }
+
     private static bool RenderAndCheckForNonBlackPixel(GaugeWidget widget, Dictionary<string, object> data)
     {
         using var bitmap = new SKBitmap(widget.Width, widget.Height, SKColorType.Rgb565, SKAlphaType.Opaque);

@@ -840,6 +840,19 @@ public partial class WidgetDesignerWindow : Window
 
         var keyComboBox = new ComboBox { ItemsSource = view, DisplayMemberPath = "DisplayName", SelectedItem = currentDescriptor };
         keyComboBox.GroupStyle.Add(groupStyle);
+
+        // ScrollViewer.CanContentScroll is an inherited attached property;
+        // ComboBox's default style sets it True (item-by-item "logical"
+        // scrolling), which the grouped dropdown's nested ScrollViewer
+        // (Theme/ForgeTheme.xaml) picks up ambiently since it doesn't bind
+        // the property itself. With group headers now mixed into a 20+ item
+        // list, that line-based stepping felt jumpy/rigid under the mouse
+        // wheel. False switches it to smooth pixel-based scrolling.
+        // Virtualization buys nothing at this list size and only adds more
+        // ways for grouping + scrolling to interact oddly, so it's off too.
+        ScrollViewer.SetCanContentScroll(keyComboBox, false);
+        VirtualizingPanel.SetIsVirtualizing(keyComboBox, false);
+
         keyComboBox.SelectionChanged += (_, _) =>
         {
             if (keyComboBox.SelectedItem is WidgetCatalog.StatKeyDescriptor descriptor)
@@ -873,10 +886,11 @@ public partial class WidgetDesignerWindow : Window
     /// A compact arc gauge (see <see cref="GaugeWidget"/>): the same
     /// reading/label/unit/decimals fields as a stat widget, plus the value
     /// range the arc sweeps across, its own color independent of the text
-    /// color, and its own size control separate from the Font section's
-    /// Size (which sizes the label, sitting in its own strip below the
-    /// ring - the value's size is always clamped to fit inside the ring
-    /// itself, see GaugeWidget.DrawValue).
+    /// color, its own size control separate from the Font section's Size
+    /// (which sizes the label, sitting in its own strip below the ring -
+    /// the value's size is always clamped to fit inside the ring itself,
+    /// see GaugeWidget.DrawValue), and a Label distance control for the
+    /// gap between the ring and that strip.
     /// </summary>
     private void AddGaugeFields(WidgetDesignItem item)
     {
@@ -890,6 +904,12 @@ public partial class WidgetDesignerWindow : Window
         AddTextField("Unit", item.GetSetting("unit") ?? string.Empty, value =>
         {
             item.SetSetting("unit", value);
+            OnItemChanged();
+        });
+
+        AddNumericField("Label distance", item.GetDoubleSetting("labelGapPx", 0), value =>
+        {
+            item.SetDoubleSetting("labelGapPx", value);
             OnItemChanged();
         });
 

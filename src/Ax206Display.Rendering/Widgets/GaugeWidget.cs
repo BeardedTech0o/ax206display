@@ -41,6 +41,7 @@ public sealed class GaugeWidget : IWidget
     private readonly double _minValue;
     private readonly double _maxValue;
     private readonly float? _valueFontSizePx;
+    private readonly float _labelGapPx;
     private readonly SKColor _gaugeColor;
     private readonly SKColor _textColor;
     private readonly WidgetFontStyle _fontStyle;
@@ -56,6 +57,7 @@ public sealed class GaugeWidget : IWidget
         double minValue = 0,
         double maxValue = 100,
         float? valueFontSizePx = null,
+        float labelGapPx = 0,
         SKColor? gaugeColor = null,
         SKColor? textColor = null,
         WidgetFontStyle? fontStyle = null)
@@ -73,6 +75,7 @@ public sealed class GaugeWidget : IWidget
         // of throwing, consistent with how SystemStatWidget tolerates bad input.
         _maxValue = maxValue > minValue ? maxValue : minValue + 1;
         _valueFontSizePx = valueFontSizePx;
+        _labelGapPx = Math.Max(0, labelGapPx);
         _gaugeColor = gaugeColor ?? SKColors.White;
         _textColor = textColor ?? SKColors.White;
         _fontStyle = fontStyle ?? WidgetFontStyle.Default;
@@ -93,7 +96,12 @@ public sealed class GaugeWidget : IWidget
 
         var hasLabel = !string.IsNullOrEmpty(_label);
         var footerHeight = hasLabel ? Height * FooterHeightFraction : 0f;
-        var circleAreaHeight = Height - footerHeight;
+        var gap = hasLabel ? _labelGapPx : 0f;
+        // The ring's own area shrinks by the gap so the label's strip still
+        // ends up entirely within Height - the gap is real extra space, not
+        // just a bigger footer (which would also grow the label's own text
+        // box instead of just pushing it further from the ring).
+        var circleAreaHeight = Math.Max(0f, Height - footerHeight - gap);
 
         var (ring, strokeWidth) = ComputeRing(circleAreaHeight);
         DrawArc(canvas, ring, strokeWidth, fraction);
@@ -105,7 +113,7 @@ public sealed class GaugeWidget : IWidget
 
         if (hasLabel)
         {
-            DrawLabel(canvas, circleAreaHeight, footerHeight);
+            DrawLabel(canvas, circleAreaHeight + gap, footerHeight);
         }
     }
 
@@ -176,17 +184,18 @@ public sealed class GaugeWidget : IWidget
     }
 
     /// <summary>
-    /// The label's own strip, entirely below circleAreaHeight - physically
+    /// The label's own strip, starting at labelTop (the ring's area plus the
+    /// configurable gap - see <see cref="_labelGapPx"/>) - physically
     /// separate from the ring's bounding square, so it never overlaps the
     /// arc regardless of how tight the ring's own padding is. Sized/styled
     /// the same way any other widget's single line of text would be (the
     /// shared Font/Size controls in the property panel apply here, not to
     /// the value - see <see cref="_valueFontSizePx"/> for that one).
     /// </summary>
-    private void DrawLabel(SKCanvas canvas, float circleAreaHeight, float footerHeight)
+    private void DrawLabel(SKCanvas canvas, float labelTop, float footerHeight)
     {
         canvas.Save();
-        canvas.Translate(0, circleAreaHeight);
+        canvas.Translate(0, labelTop);
         WidgetTextRenderer.DrawCentered(canvas, _label, Width, (int)footerHeight, _textColor, _fontStyle);
         canvas.Restore();
     }
