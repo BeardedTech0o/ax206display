@@ -110,6 +110,7 @@ public class WidgetFactoryTests
         config.Settings["decimals"] = 1;
         config.Settings["minValue"] = 0;
         config.Settings["maxValue"] = 100;
+        config.Settings["valueFontSizePx"] = 32;
         config.Settings["gaugeColor"] = "#D7FF3E";
 
         var widget = WidgetFactory.Create(config);

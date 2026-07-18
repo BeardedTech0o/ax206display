@@ -639,7 +639,7 @@ public partial class WidgetDesignerWindow : Window
                 AddGaugeFields(item);
                 AddColorField(item, "Gauge color", "gaugeColor");
                 AddColorField(item, "Text color", "textColor");
-                AddFontField(item);
+                AddFontField(item, sizeLabel: "Label text size");
                 break;
         }
     }
@@ -694,7 +694,7 @@ public partial class WidgetDesignerWindow : Window
         PropertyPanel.Children.Add(comboBox);
     }
 
-    private void AddFontField(WidgetDesignItem item)
+    private void AddFontField(WidgetDesignItem item, string sizeLabel = "Size")
     {
         PropertyPanel.Children.Add(new TextBlock { Text = "Font", Margin = new Thickness(0, 6, 0, 2) });
 
@@ -730,7 +730,7 @@ public partial class WidgetDesignerWindow : Window
 
         PropertyPanel.Children.Add(stylePanel);
 
-        PropertyPanel.Children.Add(new TextBlock { Text = "Size", Margin = new Thickness(0, 6, 0, 2) });
+        PropertyPanel.Children.Add(new TextBlock { Text = sizeLabel, Margin = new Thickness(0, 6, 0, 2) });
 
         // A layout saved before pixel sizes existed may carry the old
         // relative "fontScale" instead of "fontSizePx" - it still renders
@@ -872,8 +872,11 @@ public partial class WidgetDesignerWindow : Window
     /// <summary>
     /// A compact arc gauge (see <see cref="GaugeWidget"/>): the same
     /// reading/label/unit/decimals fields as a stat widget, plus the value
-    /// range the arc sweeps across and its own color independent of the
-    /// text color.
+    /// range the arc sweeps across, its own color independent of the text
+    /// color, and its own size control separate from the Font section's
+    /// Size (which sizes the label, sitting in its own strip below the
+    /// ring - the value's size is always clamped to fit inside the ring
+    /// itself, see GaugeWidget.DrawValue).
     /// </summary>
     private void AddGaugeFields(WidgetDesignItem item)
     {
@@ -891,6 +894,7 @@ public partial class WidgetDesignerWindow : Window
         });
 
         AddDecimalsField(item);
+        AddValueSizeField(item);
 
         AddNumericField("Minimum value", item.GetDoubleSetting("minValue", 0), value =>
         {
@@ -902,6 +906,40 @@ public partial class WidgetDesignerWindow : Window
             item.SetDoubleSetting("maxValue", value);
             OnItemChanged();
         });
+    }
+
+    /// <summary>
+    /// The gauge value's own size control - deliberately separate from the
+    /// Font section's Size (which, for a gauge, sizes only the label). Even
+    /// a chosen fixed size here is still clamped at render time to fit
+    /// inside the ring without touching it.
+    /// </summary>
+    private void AddValueSizeField(WidgetDesignItem item)
+    {
+        PropertyPanel.Children.Add(new TextBlock { Text = "Value text size", Margin = new Thickness(0, 6, 0, 2) });
+
+        var currentPixels = item.GetDoubleSetting("valueFontSizePx", 0);
+        var currentSizeOption = WidgetCatalog.FontSizes.FirstOrDefault(s => s.Pixels is { } px && Math.Abs(px - currentPixels) < 0.001)
+            ?? WidgetCatalog.FontSizes[0];
+
+        var sizeComboBox = new ComboBox { ItemsSource = WidgetCatalog.FontSizes, DisplayMemberPath = "DisplayName", SelectedItem = currentSizeOption };
+        sizeComboBox.SelectionChanged += (_, _) =>
+        {
+            if (sizeComboBox.SelectedItem is WidgetCatalog.FontSizeOption option)
+            {
+                if (option.Pixels is { } pixels)
+                {
+                    item.SetDoubleSetting("valueFontSizePx", pixels);
+                }
+                else
+                {
+                    item.Settings.Remove("valueFontSizePx");
+                }
+
+                OnItemChanged();
+            }
+        };
+        PropertyPanel.Children.Add(sizeComboBox);
     }
 
     private void AddDecimalsField(WidgetDesignItem item)

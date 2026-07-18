@@ -12,7 +12,7 @@ internal static class WidgetTextRenderer
     private const float HeightFraction = 0.6f;
     private const float MaxWidthFraction = 0.95f;
 
-    internal static void DrawCentered(SKCanvas canvas, string text, int width, int height, SKColor color, WidgetFontStyle? fontStyle = null)
+    internal static void DrawCentered(SKCanvas canvas, string text, int width, int height, SKColor color, WidgetFontStyle? fontStyle = null, bool alwaysShrinkToFitWidth = false)
     {
         var style = fontStyle ?? WidgetFontStyle.Default;
         var typeface = ResolveTypeface(style);
@@ -29,9 +29,12 @@ internal static class WidgetTextRenderer
         // Auto-fitted text is still shrunk to the widget's width so nothing
         // bleeds outside its box. Fixed-size text deliberately skips this -
         // "24px" means 24px even if the box is narrow (the canvas clip in
-        // FrameCompositor keeps any overflow inside the widget bounds).
+        // FrameCompositor keeps any overflow inside the widget bounds) -
+        // unless the caller opts into alwaysShrinkToFitWidth (GaugeWidget's
+        // value text: it must never touch the ring around it, so an
+        // explicitly chosen size is still a ceiling, not a guarantee).
         var maxTextWidth = width * MaxWidthFraction;
-        if (style.FixedSizePixels is null && textWidth > maxTextWidth)
+        if ((alwaysShrinkToFitWidth || style.FixedSizePixels is null) && textWidth > maxTextWidth)
         {
             font.Size *= maxTextWidth / textWidth;
             textWidth = font.MeasureText(text, paint);

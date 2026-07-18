@@ -58,6 +58,7 @@ public static class WidgetFactory
         var decimals = config.Settings["decimals"]?.GetValue<int>() ?? 0;
         var minValue = ReadDouble(config.Settings["minValue"]) ?? 0;
         var maxValue = ReadDouble(config.Settings["maxValue"]) ?? 100;
+        var valueFontSizePx = (float?)ReadDouble(config.Settings["valueFontSizePx"]);
 
         return new GaugeWidget(
             config.Id,
@@ -69,6 +70,7 @@ public static class WidgetFactory
             decimals,
             minValue,
             maxValue,
+            valueFontSizePx,
             ReadColor(config, "gaugeColor"),
             ReadTextColor(config),
             ReadFontStyle(config));
