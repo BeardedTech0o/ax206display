@@ -29,7 +29,8 @@
             <TextBlock Text="Add widget:" VerticalAlignment="Center" Margin="0,0,6,0"/>
             <Button x:Name="AddClockButton" Content="Clock" Margin="0,0,4,0" Padding="10,4" Click="OnAddClockClick"/>
             <Button x:Name="AddTextButton" Content="Text" Margin="0,0,4,0" Padding="10,4" Click="OnAddTextClick"/>
-            <Button x:Name="AddStatButton" Content="System Stat" Margin="0,0,14,0" Padding="10,4" Click="OnAddStatClick"/>
+            <Button x:Name="AddStatButton" Content="System Stat" Margin="0,0,4,0" Padding="10,4" Click="OnAddStatClick"/>
+            <Button x:Name="AddGaugeButton" Content="Gauge" Margin="0,0,14,0" Padding="10,4" Click="OnAddGaugeClick"/>
 
             <Button x:Name="DeleteButton" Content="Delete Selected" Margin="0,0,14,0" Padding="10,4" Click="OnDeleteClick" IsEnabled="False"/>
             <Button x:Name="SaveButton" Content="Save" Padding="16,4" Style="{StaticResource AccentButtonStyle}" Click="OnSaveClick" IsEnabled="False"/>

@@ -100,6 +100,32 @@ public class WidgetFactoryTests
         Assert.Contains("dataKey", ex.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Create_GaugeWidget()
+    {
+        var config = MakeConfig("gauge");
+        config.Settings["dataKey"] = "system.cpu.load";
+        config.Settings["label"] = "CPU";
+        config.Settings["unit"] = "%";
+        config.Settings["decimals"] = 1;
+        config.Settings["minValue"] = 0;
+        config.Settings["maxValue"] = 100;
+        config.Settings["gaugeColor"] = "#D7FF3E";
+
+        var widget = WidgetFactory.Create(config);
+
+        Assert.IsType<GaugeWidget>(widget);
+    }
+
+    [Fact]
+    public void Create_GaugeWidgetWithoutDataKey_Throws()
+    {
+        var config = MakeConfig("gauge");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => WidgetFactory.Create(config));
+        Assert.Contains("dataKey", ex.Message, StringComparison.Ordinal);
+    }
+
     private static WidgetConfig MakeConfig(string type) => new()
     {
         Id = "widget-1",

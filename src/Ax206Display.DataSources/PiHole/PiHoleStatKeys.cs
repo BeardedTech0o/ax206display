@@ -10,4 +10,10 @@ public static class PiHoleStatKeys
     public const string AdsBlockedToday = "pihole.adsBlockedToday";
     public const string AdsPercentageToday = "pihole.adsPercentageToday";
     public const string DnsQueriesToday = "pihole.dnsQueriesToday";
+    public const string DomainsOnBlocklist = "pihole.domainsOnBlocklist";
+    public const string QueriesCached = "pihole.queriesCached";
+    public const string QueriesForwarded = "pihole.queriesForwarded";
+    public const string UniqueDomains = "pihole.uniqueDomains";
+    public const string ActiveClients = "pihole.activeClients";
+    public const string TotalClients = "pihole.totalClients";
 }

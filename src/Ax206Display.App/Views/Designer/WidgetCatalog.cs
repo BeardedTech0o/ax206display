@@ -19,25 +19,40 @@ internal static class WidgetCatalog
         new("clock", "Clock"),
         new("text", "Text Label"),
         new("stat", "System Stat"),
+        new("gauge", "Gauge"),
     ];
 
-    internal sealed record StatKeyDescriptor(string Key, string DisplayName, string DefaultLabel, string DefaultUnit);
+    internal const string CategoryLocalDevice = "Local Device";
+    internal const string CategoryNetwork = "Network";
+    internal const string CategoryPiHole = "Pi-hole";
+    internal const string CategoryUniFi = "UniFi";
+    internal const string CategoryProxmox = "Proxmox";
+
+    internal sealed record StatKeyDescriptor(string Key, string Category, string DisplayName, string DefaultLabel, string DefaultUnit);
 
     internal static readonly IReadOnlyList<StatKeyDescriptor> StatKeys =
     [
-        new(SystemStatKeys.CpuLoadPercent, "CPU Load", "CPU", "%"),
-        new(SystemStatKeys.CpuTemperatureCelsius, "CPU Temperature", "CPU", "°C"),
-        new(SystemStatKeys.MemoryUsedPercent, "Memory Used", "RAM", "%"),
-        new(SystemStatKeys.GpuLoadPercent, "GPU Load", "GPU", "%"),
-        new(SystemStatKeys.GpuTemperatureCelsius, "GPU Temperature", "GPU", "°C"),
-        new(NetworkSpeedKeys.DownloadMbps, "Network Download", "Down", " Mbps"),
-        new(NetworkSpeedKeys.UploadMbps, "Network Upload", "Up", " Mbps"),
-        new(PiHoleStatKeys.AdsBlockedToday, "Pi-hole: Ads Blocked Today", "Blocked", string.Empty),
-        new(PiHoleStatKeys.AdsPercentageToday, "Pi-hole: Blocked Percentage", "Blocked", "%"),
-        new(PiHoleStatKeys.DnsQueriesToday, "Pi-hole: DNS Queries Today", "Queries", string.Empty),
-        new(UniFiStatKeys.ClientCount, "UniFi: Connected Clients", "Clients", string.Empty),
-        new(UniFiStatKeys.WanDownloadMbps, "UniFi: WAN Download", "Down", " Mbps"),
-        new(UniFiStatKeys.WanUploadMbps, "UniFi: WAN Upload", "Up", " Mbps"),
+        new(SystemStatKeys.CpuLoadPercent, CategoryLocalDevice, "CPU Load", "CPU", "%"),
+        new(SystemStatKeys.CpuTemperatureCelsius, CategoryLocalDevice, "CPU Temperature", "CPU", "°C"),
+        new(SystemStatKeys.MemoryUsedPercent, CategoryLocalDevice, "Memory Used", "RAM", "%"),
+        new(SystemStatKeys.GpuLoadPercent, CategoryLocalDevice, "GPU Load", "GPU", "%"),
+        new(SystemStatKeys.GpuTemperatureCelsius, CategoryLocalDevice, "GPU Temperature", "GPU", "°C"),
+        new(NetworkSpeedKeys.DownloadMbps, CategoryNetwork, "Network Download", "Down", " Mbps"),
+        new(NetworkSpeedKeys.UploadMbps, CategoryNetwork, "Network Upload", "Up", " Mbps"),
+        new(PiHoleStatKeys.AdsBlockedToday, CategoryPiHole, "Ads Blocked Today", "Blocked", string.Empty),
+        new(PiHoleStatKeys.AdsPercentageToday, CategoryPiHole, "Blocked Percentage", "Blocked", "%"),
+        new(PiHoleStatKeys.DnsQueriesToday, CategoryPiHole, "DNS Queries Today", "Queries", string.Empty),
+        new(PiHoleStatKeys.DomainsOnBlocklist, CategoryPiHole, "Domains on Blocklist", "Blocklist", string.Empty),
+        new(PiHoleStatKeys.QueriesCached, CategoryPiHole, "Queries Cached", "Cached", string.Empty),
+        new(PiHoleStatKeys.QueriesForwarded, CategoryPiHole, "Queries Forwarded", "Forwarded", string.Empty),
+        new(PiHoleStatKeys.UniqueDomains, CategoryPiHole, "Unique Domains", "Domains", string.Empty),
+        new(PiHoleStatKeys.ActiveClients, CategoryPiHole, "Active Clients", "Active", string.Empty),
+        new(PiHoleStatKeys.TotalClients, CategoryPiHole, "Total Clients", "Clients", string.Empty),
+        new(UniFiStatKeys.ClientCount, CategoryUniFi, "Connected Clients", "Clients", string.Empty),
+        new(UniFiStatKeys.LanClientCount, CategoryUniFi, "LAN Clients", "LAN", string.Empty),
+        new(UniFiStatKeys.WlanClientCount, CategoryUniFi, "WLAN Clients", "WLAN", string.Empty),
+        new(UniFiStatKeys.WanDownloadMbps, CategoryUniFi, "WAN Download", "Down", " Mbps"),
+        new(UniFiStatKeys.WanUploadMbps, CategoryUniFi, "WAN Upload", "Up", " Mbps"),
     ];
 
     internal sealed record ColorSwatch(string Name, string Hex);
@@ -108,8 +123,22 @@ internal static class WidgetCatalog
 
     internal static WidgetDesignItem CreateDefault(string type, int canvasWidth, int canvasHeight, int nextZOrder)
     {
-        var width = Math.Clamp(canvasWidth / 3, 20, canvasWidth);
-        var height = Math.Clamp(canvasHeight / 4, 15, canvasHeight);
+        int width, height;
+        if (type == "gauge")
+        {
+            // A gauge reads best roughly square - the arc gets clipped
+            // toward a circle either way (see GaugeWidget), but starting
+            // square avoids handing the user a visibly squashed default.
+            var side = Math.Clamp(Math.Min(canvasWidth, canvasHeight) / 2, 20, Math.Min(canvasWidth, canvasHeight));
+            width = side;
+            height = side;
+        }
+        else
+        {
+            width = Math.Clamp(canvasWidth / 3, 20, canvasWidth);
+            height = Math.Clamp(canvasHeight / 4, 15, canvasHeight);
+        }
+
         var x = Math.Max(0, (canvasWidth - width) / 2);
         var y = Math.Max(0, (canvasHeight - height) / 2);
 
@@ -127,6 +156,7 @@ internal static class WidgetCatalog
         switch (type)
         {
             case "stat":
+            case "gauge":
                 var defaultStat = StatKeys[0];
                 item.SetSetting("dataKey", defaultStat.Key);
                 item.SetSetting("label", defaultStat.DefaultLabel);

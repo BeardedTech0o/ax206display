@@ -10,4 +10,6 @@ public static class UniFiStatKeys
     public const string ClientCount = "unifi.clientCount";
     public const string WanDownloadMbps = "unifi.wan.download.mbps";
     public const string WanUploadMbps = "unifi.wan.upload.mbps";
+    public const string LanClientCount = "unifi.lan.clientCount";
+    public const string WlanClientCount = "unifi.wlan.clientCount";
 }

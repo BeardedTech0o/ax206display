@@ -41,6 +41,7 @@ public static class HostFactory
         services.AddSingleton<RenderDataHub>();
         services.AddSingleton<IRenderDataProvider>(sp => sp.GetRequiredService<RenderDataHub>());
         services.AddSingleton<ProxmoxGuestDirectory>();
+        services.AddSingleton<ProxmoxNodeDirectory>();
 
         services.AddSingleton<TrayIconHostedService>();
         services.AddHostedService(sp => sp.GetRequiredService<TrayIconHostedService>());

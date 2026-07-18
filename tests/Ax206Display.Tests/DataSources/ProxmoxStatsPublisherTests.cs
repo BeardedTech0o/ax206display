@@ -57,4 +57,40 @@ public class ProxmoxStatsPublisherTests
 
         Assert.Equal(0.0, (double)hub.GetSnapshot()[ProxmoxGuestKeys.MemoryUsedPercent(300)]);
     }
+
+    [Fact]
+    public void PublishNodes_PublishesEachNodeUnderItsOwnKeys()
+    {
+        var hub = new RenderDataHub();
+        var nodes = new List<ProxmoxNodeStatus>
+        {
+            new()
+            {
+                Node = "pve1",
+                Status = "online",
+                CpuUsageFraction = 0.4,
+                MemoryUsedBytes = 3_000_000_000,
+                MemoryTotalBytes = 6_000_000_000,
+                UptimeSeconds = 864_000, // 10 days
+            },
+        };
+
+        ProxmoxStatsPublisher.PublishNodes(nodes, hub.Publish);
+
+        var data = hub.GetSnapshot();
+        Assert.Equal(40.0, (double)data[ProxmoxNodeKeys.CpuUsedPercent("pve1")]);
+        Assert.Equal(50.0, (double)data[ProxmoxNodeKeys.MemoryUsedPercent("pve1")]);
+        Assert.Equal(10.0, (double)data[ProxmoxNodeKeys.UptimeDays("pve1")]);
+    }
+
+    [Fact]
+    public void PublishNodes_ZeroMemoryTotal_DoesNotDivideByZero()
+    {
+        var hub = new RenderDataHub();
+        var nodes = new List<ProxmoxNodeStatus> { new() { Node = "pve1", Status = "online", MemoryTotalBytes = 0 } };
+
+        ProxmoxStatsPublisher.PublishNodes(nodes, hub.Publish);
+
+        Assert.Equal(0.0, (double)hub.GetSnapshot()[ProxmoxNodeKeys.MemoryUsedPercent("pve1")]);
+    }
 }

@@ -64,7 +64,9 @@ public class PiHoleClientTests
 
             const string summaryJson = """
                 {
-                  "queries": { "total": 9876, "blocked": 1234, "percent_blocked": 12.5 }
+                  "queries": { "total": 9876, "blocked": 1234, "percent_blocked": 12.5, "unique_domains": 543, "forwarded": 4000, "cached": 5000 },
+                  "clients": { "active": 8, "total": 12 },
+                  "gravity": { "domains_being_blocked": 150000 }
                 }
                 """;
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(summaryJson, Encoding.UTF8, "application/json") };
@@ -77,6 +79,12 @@ public class PiHoleClientTests
         Assert.Equal(1234, summary.AdsBlockedToday);
         Assert.Equal(12.5, summary.AdsPercentageToday);
         Assert.Equal(9876, summary.DnsQueriesToday);
+        Assert.Equal(150000, summary.DomainsOnBlocklist);
+        Assert.Equal(5000, summary.QueriesCached);
+        Assert.Equal(4000, summary.QueriesForwarded);
+        Assert.Equal(543, summary.UniqueDomains);
+        Assert.Equal(8, summary.ActiveClients);
+        Assert.Equal(12, summary.TotalClients);
     }
 
     private static PiHoleClient CreateClient(FakeHttpMessageHandler handler)

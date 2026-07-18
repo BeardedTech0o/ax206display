@@ -21,6 +21,8 @@ public class UniFiStatsPublisherTests
 
         var data = hub.GetSnapshot();
         Assert.Equal(17.0, (double)data[UniFiStatKeys.ClientCount]);
+        Assert.Equal(5.0, (double)data[UniFiStatKeys.LanClientCount]);
+        Assert.Equal(12.0, (double)data[UniFiStatKeys.WlanClientCount]);
         Assert.Equal(10.0, (double)data[UniFiStatKeys.WanDownloadMbps]);
         Assert.Equal(3.0, (double)data[UniFiStatKeys.WanUploadMbps]);
     }
@@ -35,6 +37,8 @@ public class UniFiStatsPublisherTests
 
         var data = hub.GetSnapshot();
         Assert.Equal(3.0, (double)data[UniFiStatKeys.ClientCount]);
+        Assert.Equal(3.0, (double)data[UniFiStatKeys.LanClientCount]);
+        Assert.Equal(0.0, (double)data[UniFiStatKeys.WlanClientCount]);
         Assert.Equal(0.0, (double)data[UniFiStatKeys.WanDownloadMbps]);
         Assert.Equal(0.0, (double)data[UniFiStatKeys.WanUploadMbps]);
     }

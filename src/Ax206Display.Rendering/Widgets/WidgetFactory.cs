@@ -19,6 +19,7 @@ public static class WidgetFactory
             "clock" => CreateClock(config),
             "text" => CreateText(config),
             "stat" => CreateStat(config),
+            "gauge" => CreateGauge(config),
             _ => throw new NotSupportedException($"Unknown widget type '{config.Type}' (widget id '{config.Id}')."),
         };
     }
@@ -47,9 +48,37 @@ public static class WidgetFactory
         return new SystemStatWidget(config.Id, config.Width, config.Height, dataKey, label, unit, decimals, ReadTextColor(config), ReadFontStyle(config));
     }
 
-    private static SKColor? ReadTextColor(WidgetConfig config)
+    private static GaugeWidget CreateGauge(WidgetConfig config)
     {
-        if (config.Settings["textColor"]?.GetValue<string>() is { } textColorHex && SKColor.TryParse(textColorHex, out var parsedColor))
+        var dataKey = config.Settings["dataKey"]?.GetValue<string>()
+            ?? throw new InvalidOperationException($"Gauge widget '{config.Id}' is missing the required 'dataKey' setting.");
+
+        var label = config.Settings["label"]?.GetValue<string>() ?? string.Empty;
+        var unit = config.Settings["unit"]?.GetValue<string>() ?? string.Empty;
+        var decimals = config.Settings["decimals"]?.GetValue<int>() ?? 0;
+        var minValue = ReadDouble(config.Settings["minValue"]) ?? 0;
+        var maxValue = ReadDouble(config.Settings["maxValue"]) ?? 100;
+
+        return new GaugeWidget(
+            config.Id,
+            config.Width,
+            config.Height,
+            dataKey,
+            label,
+            unit,
+            decimals,
+            minValue,
+            maxValue,
+            ReadColor(config, "gaugeColor"),
+            ReadTextColor(config),
+            ReadFontStyle(config));
+    }
+
+    private static SKColor? ReadTextColor(WidgetConfig config) => ReadColor(config, "textColor");
+
+    private static SKColor? ReadColor(WidgetConfig config, string settingKey)
+    {
+        if (config.Settings[settingKey]?.GetValue<string>() is { } hex && SKColor.TryParse(hex, out var parsedColor))
         {
             return parsedColor;
         }

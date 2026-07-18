@@ -71,6 +71,12 @@ public sealed class PiHoleClient : IPiHoleClient
             AdsBlockedToday = body.Queries.Blocked,
             AdsPercentageToday = body.Queries.PercentBlocked,
             DnsQueriesToday = body.Queries.Total,
+            DomainsOnBlocklist = body.Gravity.DomainsBeingBlocked,
+            QueriesCached = body.Queries.Cached,
+            QueriesForwarded = body.Queries.Forwarded,
+            UniqueDomains = body.Queries.UniqueDomains,
+            ActiveClients = body.Clients.Active,
+            TotalClients = body.Clients.Total,
         };
     }
 
@@ -95,6 +101,12 @@ public sealed class PiHoleClient : IPiHoleClient
     {
         [JsonPropertyName("queries")]
         public QueriesInfo Queries { get; set; } = new();
+
+        [JsonPropertyName("clients")]
+        public ClientsInfo Clients { get; set; } = new();
+
+        [JsonPropertyName("gravity")]
+        public GravityInfo Gravity { get; set; } = new();
     }
 
     private sealed class QueriesInfo
@@ -107,5 +119,29 @@ public sealed class PiHoleClient : IPiHoleClient
 
         [JsonPropertyName("percent_blocked")]
         public double PercentBlocked { get; set; }
+
+        [JsonPropertyName("unique_domains")]
+        public long UniqueDomains { get; set; }
+
+        [JsonPropertyName("forwarded")]
+        public long Forwarded { get; set; }
+
+        [JsonPropertyName("cached")]
+        public long Cached { get; set; }
+    }
+
+    private sealed class ClientsInfo
+    {
+        [JsonPropertyName("active")]
+        public long Active { get; set; }
+
+        [JsonPropertyName("total")]
+        public long Total { get; set; }
+    }
+
+    private sealed class GravityInfo
+    {
+        [JsonPropertyName("domains_being_blocked")]
+        public long DomainsBeingBlocked { get; set; }
     }
 }

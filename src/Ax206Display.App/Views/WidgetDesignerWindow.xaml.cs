@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Ax206Display.App.Services;
@@ -29,6 +30,7 @@ public partial class WidgetDesignerWindow : Window
     private readonly ConfigService _configService;
     private readonly IRenderDataProvider _dataProvider;
     private readonly ProxmoxGuestDirectory _proxmoxGuestDirectory;
+    private readonly ProxmoxNodeDirectory _proxmoxNodeDirectory;
     private readonly DisplayManagerHostedService _displayManager;
     private readonly DispatcherTimer _timer;
 
@@ -47,13 +49,14 @@ public partial class WidgetDesignerWindow : Window
     private System.Windows.Shapes.Line? _verticalGuideLine;
     private System.Windows.Shapes.Line? _horizontalGuideLine;
 
-    public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider, ProxmoxGuestDirectory proxmoxGuestDirectory, DisplayManagerHostedService displayManager)
+    public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider, ProxmoxGuestDirectory proxmoxGuestDirectory, ProxmoxNodeDirectory proxmoxNodeDirectory, DisplayManagerHostedService displayManager)
     {
         InitializeComponent();
         Theme.DarkTitleBar.Apply(this);
         _configService = configService;
         _dataProvider = dataProvider;
         _proxmoxGuestDirectory = proxmoxGuestDirectory;
+        _proxmoxNodeDirectory = proxmoxNodeDirectory;
         _displayManager = displayManager;
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -419,6 +422,8 @@ public partial class WidgetDesignerWindow : Window
 
     private void OnAddStatClick(object sender, RoutedEventArgs e) => AddWidget("stat");
 
+    private void OnAddGaugeClick(object sender, RoutedEventArgs e) => AddWidget("gauge");
+
     private void AddWidget(string type)
     {
         if (_selectedDevice is null)
@@ -610,7 +615,7 @@ public partial class WidgetDesignerWindow : Window
                     item.SetSetting("timeFormat", value);
                     OnItemChanged();
                 });
-                AddColorField(item);
+                AddColorField(item, "Text color", "textColor");
                 AddFontField(item);
                 break;
 
@@ -620,13 +625,20 @@ public partial class WidgetDesignerWindow : Window
                     item.SetSetting("text", value);
                     OnItemChanged();
                 });
-                AddColorField(item);
+                AddColorField(item, "Text color", "textColor");
                 AddFontField(item);
                 break;
 
             case "stat":
                 AddStatFields(item);
-                AddColorField(item);
+                AddColorField(item, "Text color", "textColor");
+                AddFontField(item);
+                break;
+
+            case "gauge":
+                AddGaugeFields(item);
+                AddColorField(item, "Gauge color", "gaugeColor");
+                AddColorField(item, "Text color", "textColor");
                 AddFontField(item);
                 break;
         }
@@ -662,11 +674,11 @@ public partial class WidgetDesignerWindow : Window
         PropertyPanel.Children.Add(comboBox);
     }
 
-    private void AddColorField(WidgetDesignItem item)
+    private void AddColorField(WidgetDesignItem item, string label, string settingKey)
     {
-        PropertyPanel.Children.Add(new TextBlock { Text = "Text color", Margin = new Thickness(0, 6, 0, 2) });
+        PropertyPanel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 6, 0, 2) });
 
-        var currentHex = item.GetSetting("textColor");
+        var currentHex = item.GetSetting(settingKey);
         var currentSwatch = WidgetCatalog.Colors.FirstOrDefault(c => string.Equals(c.Hex, currentHex, StringComparison.OrdinalIgnoreCase))
             ?? WidgetCatalog.Colors[0];
 
@@ -675,7 +687,7 @@ public partial class WidgetDesignerWindow : Window
         {
             if (comboBox.SelectedItem is WidgetCatalog.ColorSwatch swatch)
             {
-                item.SetSetting("textColor", swatch.Hex);
+                item.SetSetting(settingKey, swatch.Hex);
                 OnItemChanged();
             }
         };
@@ -750,25 +762,50 @@ public partial class WidgetDesignerWindow : Window
     }
 
     /// <summary>
-    /// The fixed system/network keys plus one entry per currently-known
-    /// Proxmox guest (CPU and memory) - read from ProxmoxGuestDirectory, a
-    /// plain in-memory snapshot the pump service keeps current, so opening
+    /// The fixed system/network/integration keys plus one entry per
+    /// currently-known Proxmox node (CPU/memory/uptime) and guest
+    /// (CPU/memory) - read from ProxmoxNodeDirectory/ProxmoxGuestDirectory,
+    /// plain in-memory snapshots the pump service keeps current, so opening
     /// this panel never makes a network call of its own.
     /// </summary>
     private List<WidgetCatalog.StatKeyDescriptor> BuildAvailableStatKeys()
     {
         var keys = new List<WidgetCatalog.StatKeyDescriptor>(WidgetCatalog.StatKeys);
 
+        foreach (var node in _proxmoxNodeDirectory.GetSnapshot())
+        {
+            keys.Add(new WidgetCatalog.StatKeyDescriptor(
+                ProxmoxNodeKeys.CpuUsedPercent(node.Node),
+                WidgetCatalog.CategoryProxmox,
+                $"{node.Node} CPU",
+                node.Node,
+                "%"));
+            keys.Add(new WidgetCatalog.StatKeyDescriptor(
+                ProxmoxNodeKeys.MemoryUsedPercent(node.Node),
+                WidgetCatalog.CategoryProxmox,
+                $"{node.Node} Memory",
+                node.Node,
+                "%"));
+            keys.Add(new WidgetCatalog.StatKeyDescriptor(
+                ProxmoxNodeKeys.UptimeDays(node.Node),
+                WidgetCatalog.CategoryProxmox,
+                $"{node.Node} Uptime",
+                node.Node,
+                " days"));
+        }
+
         foreach (var guest in _proxmoxGuestDirectory.GetSnapshot())
         {
             keys.Add(new WidgetCatalog.StatKeyDescriptor(
                 ProxmoxGuestKeys.CpuUsedPercent(guest.VmId),
-                $"Proxmox: {guest.Name} CPU",
+                WidgetCatalog.CategoryProxmox,
+                $"{guest.Name} CPU",
                 guest.Name,
                 "%"));
             keys.Add(new WidgetCatalog.StatKeyDescriptor(
                 ProxmoxGuestKeys.MemoryUsedPercent(guest.VmId),
-                $"Proxmox: {guest.Name} Memory",
+                WidgetCatalog.CategoryProxmox,
+                $"{guest.Name} Memory",
                 guest.Name,
                 "%"));
         }
@@ -776,14 +813,33 @@ public partial class WidgetDesignerWindow : Window
         return keys;
     }
 
-    private void AddStatFields(WidgetDesignItem item)
+    /// <summary>
+    /// The "Reading" dropdown shared by the stat and gauge widgets: every
+    /// available data key, grouped under a non-selectable header per
+    /// <see cref="WidgetCatalog.StatKeyDescriptor.Category"/> (Local Device,
+    /// Network, Pi-hole, UniFi, Proxmox) so the list stays scannable as more
+    /// integrations add more readings.
+    /// </summary>
+    private void AddReadingField(WidgetDesignItem item)
     {
         var availableKeys = BuildAvailableStatKeys();
         var currentKey = item.GetSetting("dataKey");
         var currentDescriptor = availableKeys.FirstOrDefault(k => k.Key == currentKey) ?? availableKeys[0];
 
         PropertyPanel.Children.Add(new TextBlock { Text = "Reading", Margin = new Thickness(0, 6, 0, 2) });
-        var keyComboBox = new ComboBox { ItemsSource = availableKeys, DisplayMemberPath = "DisplayName", SelectedItem = currentDescriptor };
+
+        var view = new ListCollectionView(availableKeys);
+        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(WidgetCatalog.StatKeyDescriptor.Category)));
+
+        var headerFactory = new FrameworkElementFactory(typeof(TextBlock));
+        headerFactory.SetBinding(TextBlock.TextProperty, new Binding("Name"));
+        headerFactory.SetValue(TextBlock.FontWeightProperty, FontWeights.Bold);
+        headerFactory.SetValue(TextBlock.MarginProperty, new Thickness(6, 6, 0, 2));
+        headerFactory.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
+        var groupStyle = new GroupStyle { HeaderTemplate = new DataTemplate { VisualTree = headerFactory } };
+
+        var keyComboBox = new ComboBox { ItemsSource = view, DisplayMemberPath = "DisplayName", SelectedItem = currentDescriptor };
+        keyComboBox.GroupStyle.Add(groupStyle);
         keyComboBox.SelectionChanged += (_, _) =>
         {
             if (keyComboBox.SelectedItem is WidgetCatalog.StatKeyDescriptor descriptor)
@@ -793,6 +849,11 @@ public partial class WidgetDesignerWindow : Window
             }
         };
         PropertyPanel.Children.Add(keyComboBox);
+    }
+
+    private void AddStatFields(WidgetDesignItem item)
+    {
+        AddReadingField(item);
 
         AddTextField("Label", item.GetSetting("label") ?? string.Empty, value =>
         {
@@ -805,6 +866,46 @@ public partial class WidgetDesignerWindow : Window
             OnItemChanged();
         });
 
+        AddDecimalsField(item);
+    }
+
+    /// <summary>
+    /// A compact arc gauge (see <see cref="GaugeWidget"/>): the same
+    /// reading/label/unit/decimals fields as a stat widget, plus the value
+    /// range the arc sweeps across and its own color independent of the
+    /// text color.
+    /// </summary>
+    private void AddGaugeFields(WidgetDesignItem item)
+    {
+        AddReadingField(item);
+
+        AddTextField("Label", item.GetSetting("label") ?? string.Empty, value =>
+        {
+            item.SetSetting("label", value);
+            OnItemChanged();
+        });
+        AddTextField("Unit", item.GetSetting("unit") ?? string.Empty, value =>
+        {
+            item.SetSetting("unit", value);
+            OnItemChanged();
+        });
+
+        AddDecimalsField(item);
+
+        AddNumericField("Minimum value", item.GetDoubleSetting("minValue", 0), value =>
+        {
+            item.SetDoubleSetting("minValue", value);
+            OnItemChanged();
+        });
+        AddNumericField("Maximum value", item.GetDoubleSetting("maxValue", 100), value =>
+        {
+            item.SetDoubleSetting("maxValue", value);
+            OnItemChanged();
+        });
+    }
+
+    private void AddDecimalsField(WidgetDesignItem item)
+    {
         PropertyPanel.Children.Add(new TextBlock { Text = "Decimal places", Margin = new Thickness(0, 6, 0, 2) });
         var decimalsComboBox = new ComboBox { ItemsSource = new[] { 0, 1, 2 }, SelectedItem = item.GetIntSetting("decimals", 0) };
         decimalsComboBox.SelectionChanged += (_, _) =>
@@ -816,6 +917,24 @@ public partial class WidgetDesignerWindow : Window
             }
         };
         PropertyPanel.Children.Add(decimalsComboBox);
+    }
+
+    private void AddNumericField(string label, double initialValue, Action<double> onChanged)
+    {
+        PropertyPanel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 6, 0, 2) });
+        var textBox = new TextBox { Text = initialValue.ToString(CultureInfo.InvariantCulture) };
+        textBox.LostFocus += (_, _) =>
+        {
+            if (double.TryParse(textBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+            {
+                onChanged(parsed);
+            }
+            else
+            {
+                textBox.Text = initialValue.ToString(CultureInfo.InvariantCulture);
+            }
+        };
+        PropertyPanel.Children.Add(textBox);
     }
 
     private void OnPaintSurface(object? sender, SKPaintSurfaceEventArgs e)

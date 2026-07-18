@@ -10,13 +10,14 @@ using Microsoft.Extensions.Logging;
 namespace Ax206Display.App.Services;
 
 /// <summary>
-/// Polls every VM/container from a configured Proxmox integration
+/// Polls every node and VM/container from a configured Proxmox integration
 /// (Kind == "proxmox" in AppConfig.Integrations) and publishes their
-/// CPU/memory into the RenderDataHub, plus keeps ProxmoxGuestDirectory
-/// current so the Widget Designer can list them without touching the
-/// network itself. Idles quietly (checking again next poll) if no Proxmox
-/// integration is configured yet, and re-authenticates automatically if the
-/// session ticket is rejected (e.g. after it expires).
+/// CPU/memory (and each node's uptime) into the RenderDataHub, plus keeps
+/// ProxmoxGuestDirectory/ProxmoxNodeDirectory current so the Widget Designer
+/// can list them without touching the network itself. Idles quietly
+/// (checking again next poll) if no Proxmox integration is configured yet,
+/// and re-authenticates automatically if the session ticket is rejected
+/// (e.g. after it expires).
 /// </summary>
 public sealed partial class ProxmoxPumpService : BackgroundService
 {
@@ -27,6 +28,7 @@ public sealed partial class ProxmoxPumpService : BackgroundService
     private readonly SecretStore _secretStore;
     private readonly RenderDataHub _hub;
     private readonly ProxmoxGuestDirectory _guestDirectory;
+    private readonly ProxmoxNodeDirectory _nodeDirectory;
     private readonly ILogger<ProxmoxPumpService> _logger;
 
     private IProxmoxClient? _client;
@@ -37,12 +39,14 @@ public sealed partial class ProxmoxPumpService : BackgroundService
         SecretStore secretStore,
         RenderDataHub hub,
         ProxmoxGuestDirectory guestDirectory,
+        ProxmoxNodeDirectory nodeDirectory,
         ILogger<ProxmoxPumpService> logger)
     {
         _configService = configService;
         _secretStore = secretStore;
         _hub = hub;
         _guestDirectory = guestDirectory;
+        _nodeDirectory = nodeDirectory;
         _logger = logger;
     }
 
@@ -97,6 +101,10 @@ public sealed partial class ProxmoxPumpService : BackgroundService
                 return;
             }
         }
+
+        var nodes = await _client.GetNodeStatusesAsync(cancellationToken);
+        ProxmoxStatsPublisher.PublishNodes(nodes, _hub.Publish);
+        _nodeDirectory.Update(nodes);
 
         var guests = await _client.GetGuestStatusesAsync(cancellationToken);
         ProxmoxStatsPublisher.Publish(guests, _hub.Publish);
