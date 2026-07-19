@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Ax206Display.App.Services;
@@ -414,6 +415,63 @@ public partial class WidgetDesignerWindow : Window
         {
             RefreshPositionText(_selectedItem);
         }
+    }
+
+    /// <summary>
+    /// Nudges the selected widget with the arrow keys instead of requiring a
+    /// mouse drag for small position tweaks: 1px plain, 5px with Shift, 10px
+    /// with Ctrl, 20px with Ctrl+Shift - four fixed step sizes reachable
+    /// through the two modifier keys WPF doesn't already claim for something
+    /// else in this window. Skipped while focus is on a control that uses
+    /// the arrow keys itself (a TextBox's cursor, a ComboBox's selection,
+    /// the brightness Slider) so this never fights normal editing.
+    /// </summary>
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_selectedItem is null || !_overlays.TryGetValue(_selectedItem, out var overlay))
+        {
+            return;
+        }
+
+        var (dx, dy) = e.Key switch
+        {
+            Key.Left => (-1, 0),
+            Key.Right => (1, 0),
+            Key.Up => (0, -1),
+            Key.Down => (0, 1),
+            _ => (0, 0),
+        };
+
+        if (dx == 0 && dy == 0)
+        {
+            return;
+        }
+
+        if (Keyboard.FocusedElement is TextBox or ComboBox or Slider)
+        {
+            return;
+        }
+
+        var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+        var step = (ctrl, shift) switch
+        {
+            (true, true) => 20,
+            (true, false) => 10,
+            (false, true) => 5,
+            (false, false) => 1,
+        };
+
+        var canvasWidth = (int)DesignerRoot.Width;
+        var canvasHeight = (int)DesignerRoot.Height;
+        var newX = Math.Clamp(_selectedItem.X + (dx * step), 0, Math.Max(0, canvasWidth - _selectedItem.Width));
+        var newY = Math.Clamp(_selectedItem.Y + (dy * step), 0, Math.Max(0, canvasHeight - _selectedItem.Height));
+
+        _selectedItem.X = newX;
+        _selectedItem.Y = newY;
+        overlay.SyncPosition();
+        OnItemChanged();
+        e.Handled = true;
     }
 
     private void OnAddClockClick(object sender, RoutedEventArgs e) => AddWidget("clock");
