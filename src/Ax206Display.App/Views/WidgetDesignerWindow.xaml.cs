@@ -399,6 +399,15 @@ public partial class WidgetDesignerWindow : Window
         _overlays[item].SetSelected(true);
         DeleteButton.IsEnabled = true;
         BuildPropertyPanel(item);
+
+        // Without this, keyboard focus stays wherever it last was - often a
+        // ComboBox/TextBox left over from editing a previous widget's
+        // properties - which OnWindowPreviewKeyDown treats as "the user is
+        // editing something, don't hijack its arrow keys" and silently
+        // refuses to nudge anything. Moving focus to OverlayCanvas on every
+        // selection, mouse-click or programmatic, means arrow keys work
+        // immediately after selecting a widget.
+        OverlayCanvas.Focus();
     }
 
     private void OnItemChanged()

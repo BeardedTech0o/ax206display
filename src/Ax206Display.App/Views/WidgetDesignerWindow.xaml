@@ -70,7 +70,7 @@
             <Viewbox Stretch="Uniform" Margin="16">
                 <Grid x:Name="DesignerRoot" Width="1" Height="1">
                     <skia:SKElement x:Name="PreviewElement" PaintSurface="OnPaintSurface"/>
-                    <Canvas x:Name="OverlayCanvas" Background="Transparent"/>
+                    <Canvas x:Name="OverlayCanvas" Background="Transparent" Focusable="True" FocusVisualStyle="{x:Null}"/>
                 </Grid>
             </Viewbox>
         </Border>
