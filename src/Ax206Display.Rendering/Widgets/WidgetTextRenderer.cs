@@ -1,3 +1,4 @@
+using System.Reflection;
 using SkiaSharp;
 
 namespace Ax206Display.Rendering.Widgets;
@@ -11,6 +12,18 @@ internal static class WidgetTextRenderer
 {
     private const float HeightFraction = 0.6f;
     private const float MaxWidthFraction = 0.95f;
+
+    // "Space Mono" (WidgetCatalog.FontFamilies) isn't a Windows system font,
+    // so resolving it by family name the way every other listed font is
+    // resolved would silently fall back to the default typeface on a
+    // machine that doesn't happen to have it installed. Bundled as an
+    // embedded resource (Fonts/SpaceMono/*.ttf, see the .csproj) instead, so
+    // it renders identically everywhere. Cached per (bold, italic) rather
+    // than re-decoded from the embedded bytes on every call - this runs
+    // once per frame per Space Mono widget.
+    private const string SpaceMonoFamilyName = "Space Mono";
+    private static readonly Dictionary<(bool Bold, bool Italic), SKTypeface> SpaceMonoTypefaces = [];
+    private static readonly object SpaceMonoLock = new();
 
     internal static void DrawCentered(SKCanvas canvas, string text, int width, int height, SKColor color, WidgetFontStyle? fontStyle = null, bool alwaysShrinkToFitWidth = false)
     {
@@ -53,6 +66,11 @@ internal static class WidgetTextRenderer
             return SKTypeface.Default;
         }
 
+        if (string.Equals(style.FontFamily, SpaceMonoFamilyName, StringComparison.OrdinalIgnoreCase))
+        {
+            return ResolveSpaceMono(style.Bold, style.Italic);
+        }
+
         var skStyle = new SKFontStyle(
             style.Bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,
             SKFontStyleWidth.Normal,
@@ -66,5 +84,39 @@ internal static class WidgetTextRenderer
         // combinations actually in use is small and bounded, so leaking them
         // for the process's lifetime is the safe tradeoff.
         return SKTypeface.FromFamilyName(style.FontFamily, skStyle);
+    }
+
+    private static SKTypeface ResolveSpaceMono(bool bold, bool italic)
+    {
+        var key = (bold, italic);
+        lock (SpaceMonoLock)
+        {
+            if (SpaceMonoTypefaces.TryGetValue(key, out var cached))
+            {
+                return cached;
+            }
+
+            var fileName = (bold, italic) switch
+            {
+                (true, true) => "SpaceMono-BoldItalic.ttf",
+                (true, false) => "SpaceMono-Bold.ttf",
+                (false, true) => "SpaceMono-Italic.ttf",
+                (false, false) => "SpaceMono-Regular.ttf",
+            };
+
+            // Falling back to the default typeface (rather than throwing) if
+            // the embedded resource is somehow missing keeps a broken/edited
+            // build degrading to "wrong font" instead of a render-loop crash.
+            var typeface = LoadEmbeddedTypeface(fileName) ?? SKTypeface.Default;
+            SpaceMonoTypefaces[key] = typeface;
+            return typeface;
+        }
+    }
+
+    private static SKTypeface? LoadEmbeddedTypeface(string fileName)
+    {
+        var resourceName = $"Ax206Display.Rendering.Fonts.SpaceMono.{fileName}";
+        using var stream = typeof(WidgetTextRenderer).Assembly.GetManifestResourceStream(resourceName);
+        return stream is null ? null : SKTypeface.FromStream(stream);
     }
 }

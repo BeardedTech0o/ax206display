@@ -20,4 +20,18 @@
     <ProjectReference Include="..\Ax206Display.Transport\Ax206Display.Transport.csproj" />
   </ItemGroup>
 
+  <!--
+    Bundled so "Space Mono" (WidgetCatalog.FontFamilies) actually renders as
+    Space Mono everywhere, rather than depending on it being separately
+    installed on the machine - see WidgetTextRenderer.ResolveTypeface, which
+    loads these by LogicalName instead of going through SKTypeface.FromFamilyName
+    for this one family. SIL Open Font License 1.1 (Fonts\SpaceMono\OFL.txt).
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Fonts\SpaceMono\SpaceMono-Regular.ttf" LogicalName="Ax206Display.Rendering.Fonts.SpaceMono.SpaceMono-Regular.ttf" />
+    <EmbeddedResource Include="Fonts\SpaceMono\SpaceMono-Bold.ttf" LogicalName="Ax206Display.Rendering.Fonts.SpaceMono.SpaceMono-Bold.ttf" />
+    <EmbeddedResource Include="Fonts\SpaceMono\SpaceMono-Italic.ttf" LogicalName="Ax206Display.Rendering.Fonts.SpaceMono.SpaceMono-Italic.ttf" />
+    <EmbeddedResource Include="Fonts\SpaceMono\SpaceMono-BoldItalic.ttf" LogicalName="Ax206Display.Rendering.Fonts.SpaceMono.SpaceMono-BoldItalic.ttf" />
+  </ItemGroup>
+
 </Project>
