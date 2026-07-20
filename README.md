@@ -47,6 +47,8 @@ Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 dotnet build Ax206Display.CrossPlatform.slnf
 dotnet test Ax206Display.CrossPlatform.slnf
 
+[![Buy Me a Coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=&slug=nullobj&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff)](https://www.buymeacoffee.com/nullobj)
+
 # Everything, including the WPF app (Windows only):
 dotnet build Ax206Display.sln
 ```
