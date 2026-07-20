@@ -71,3 +71,5 @@ milestone. The build enforces `TreatWarningsAsErrors` with
 `AnalysisLevel=latest-recommended`, pins the full dependency graph via
 `packages.lock.json` + `Directory.Packages.props`, and gates CI on
 `NuGetAudit`/`dotnet list package --vulnerable`.
+
+[![Buy Me a Coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=&slug=nullobj&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff)](https://www.buymeacoffee.com/nullobj)
