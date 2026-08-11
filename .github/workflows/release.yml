@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to release (e.g. v1.0.0) - creates the tag if it doesn't already exist"
+        required: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows-exe:
+    name: Publish signed Windows release
+    runs-on: windows-latest
+    # `if:` conditions can't reference the secrets context directly (see
+    # ci.yml's identical comment on its own signing step) - routed through
+    # job-level env: for the same reason.
+    env:
+      HAS_SIGNING_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: tag
+        shell: pwsh
+        run: |
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Self-contained + single-file so the download just works: no separate
+      # .NET Desktop Runtime install required on the user's machine. Native
+      # dependencies (libusb, Skia) are bundled inside the exe and
+      # self-extracted to a temp dir on first run rather than left as sibling
+      # DLLs, to keep this an actual single-file download.
+      - name: Publish self-contained single-file exe
+        run: >
+          dotnet publish src/Ax206Display.App/Ax206Display.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          --output publish
+
+      # No-op until WINDOWS_CODE_SIGNING_PFX_BASE64/_PASSWORD are configured
+      # as repo secrets - see the identical step in ci.yml for the full story
+      # (security audit finding F3 / AuthenticodeVerifier).
+      - name: Sign Ax206Display.exe
+        if: ${{ env.HAS_SIGNING_CERT == 'true' }}
+        shell: pwsh
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "ax206display-signing.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 }}"))
+          try {
+            & signtool.exe sign /f $pfxPath /p "${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}" `
+              /fd sha256 /tr http://timestamp.digicert.com /td sha256 publish/Ax206Display.exe
+          } finally {
+            Remove-Item -Path $pfxPath -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Rename and checksum the published exe
+        id: asset
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $exeName = "Ax206Display-$tag-win-x64.exe"
+          Move-Item -Path "publish/Ax206Display.exe" -Destination $exeName
+          (Get-FileHash -Path $exeName -Algorithm SHA256).Hash.ToLower() + "  $exeName" | Out-File -FilePath "$exeName.sha256" -Encoding ascii
+          "exeName=$exeName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.tag.outputs.tag }}" `
+            "${{ steps.asset.outputs.exeName }}" `
+            "${{ steps.asset.outputs.exeName }}.sha256" `
+            --title "${{ steps.tag.outputs.tag }}" `
+            --generate-notes
