@@ -70,6 +70,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
         _loopCancellation = new CancellationTokenSource();
 
         var config = await _configService.LoadAsync(cancellationToken);
+        SeedKnownAmbiguousSerialNumbers(config);
         var discovered = await DiscoverSafelyAsync(cancellationToken);
 
         if (discovered.Count == 0)
@@ -140,8 +141,9 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
     {
         _loopCancellation ??= new CancellationTokenSource();
 
-        var discovered = await DiscoverSafelyAsync(cancellationToken);
         var config = await _configService.LoadAsync(cancellationToken);
+        SeedKnownAmbiguousSerialNumbers(config);
+        var discovered = await DiscoverSafelyAsync(cancellationToken);
         var configChanged = false;
         var newDeviceCount = 0;
 
@@ -347,6 +349,28 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
         {
             _discoveryLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Tells discovery which base serial numbers are already known (from a
+    /// previous run's saved profiles) to belong to a colliding pair of
+    /// panels, so the very first post-restart scan disambiguates a lone
+    /// panel correctly instead of matching neither saved profile - see
+    /// <see cref="AmbiguousSerialTracker"/>'s doc comment for the failure
+    /// mode this closes. Only IDs shaped like a disambiguated serial
+    /// ("{serial}@{location}") qualify; the "usb:{VID}:{PID}@{location}"
+    /// fallback used for serial-less devices already has its location baked
+    /// in from the moment it's first assigned, so it never collides and is
+    /// excluded here.
+    /// </summary>
+    private void SeedKnownAmbiguousSerialNumbers(AppConfig config)
+    {
+        var knownAmbiguousSerials = config.Devices
+            .Select(d => d.Id)
+            .Where(id => id.Contains('@') && !id.StartsWith("usb:", StringComparison.Ordinal))
+            .Select(id => id[..id.IndexOf('@')]);
+
+        _discovery.SeedKnownAmbiguousSerialNumbers(knownAmbiguousSerials);
     }
 
     private static async Task<bool> DelaySafelyAsync(TimeSpan delay, CancellationToken cancellationToken)

@@ -9,4 +9,16 @@ namespace Ax206Display.Transport.Discovery;
 public interface IAx206DeviceDiscovery
 {
     Task<IReadOnlyList<IAx206Transport>> DiscoverAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Primes this discovery's duplicate-serial disambiguation memory with
+    /// serial numbers already known (from a previous run) to collide across
+    /// two physical panels, so a restart that only enumerates one of them in
+    /// its first scan still disambiguates it instead of reporting it as an
+    /// unrecognized new device. No-op for implementations that don't
+    /// disambiguate by serial collision.
+    /// </summary>
+    void SeedKnownAmbiguousSerialNumbers(IEnumerable<string> serialNumbers)
+    {
+    }
 }

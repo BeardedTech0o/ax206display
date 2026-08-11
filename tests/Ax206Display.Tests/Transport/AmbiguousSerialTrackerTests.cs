@@ -42,4 +42,26 @@ public class AmbiguousSerialTrackerTests
 
         Assert.False(tracker.ShouldDisambiguate("some-other-serial", countInThisScan: 1));
     }
+
+    [Fact]
+    public void Seed_MakesASerialDisambiguateEvenWhenSeenAloneForTheFirstTime()
+    {
+        // Simulates a full app restart where only one panel of a
+        // known-colliding pair has finished USB enumeration by the time the
+        // very first scan runs - the tracker has no prior scan of its own to
+        // remember the collision from, so it must be told up front instead.
+        var tracker = new AmbiguousSerialTracker();
+        tracker.Seed(["20201115"]);
+
+        Assert.True(tracker.ShouldDisambiguate("20201115", countInThisScan: 1));
+    }
+
+    [Fact]
+    public void Seed_DoesNotAffectUnrelatedSerials()
+    {
+        var tracker = new AmbiguousSerialTracker();
+        tracker.Seed(["20201115"]);
+
+        Assert.False(tracker.ShouldDisambiguate("some-other-serial", countInThisScan: 1));
+    }
 }

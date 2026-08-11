@@ -23,6 +23,11 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
         _logger = logger ?? NullLogger<LibUsbAx206DeviceDiscovery>.Instance;
     }
 
+    public void SeedKnownAmbiguousSerialNumbers(IEnumerable<string> serialNumbers)
+    {
+        _ambiguousSerialTracker.Seed(serialNumbers);
+    }
+
     public async Task<IReadOnlyList<IAx206Transport>> DiscoverAsync(CancellationToken cancellationToken = default)
     {
         var discovered = new List<LibUsbAx206Transport>();
