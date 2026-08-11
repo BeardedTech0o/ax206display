@@ -8,6 +8,10 @@ namespace Ax206Display.Config.Secrets;
 /// <summary>
 /// A flat key/value store of encrypted secrets, persisted as base64 blobs next
 /// to the main config file. Values are only ever decrypted in memory on demand.
+/// A single instance is shared (DI singleton) across multiple integration pump
+/// services reading concurrently and UI code writing on save/remove, so every
+/// access to the in-memory dictionary is guarded by <see cref="_syncRoot"/> -
+/// a plain Dictionary isn't safe under concurrent read+write.
 /// </summary>
 public sealed class SecretStore
 {
@@ -15,30 +19,43 @@ public sealed class SecretStore
 
     private readonly ISecretProtector _protector;
     private readonly string _filePath;
-    private Dictionary<string, string> _encryptedByKey;
+    private readonly object _syncRoot = new();
+    private Dictionary<string, string> _encryptedByKey = [];
 
     public SecretStore(ISecretProtector protector, string filePath)
     {
         _protector = protector;
         _filePath = filePath;
-        _encryptedByKey = new Dictionary<string, string>();
     }
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
+        Dictionary<string, string> loaded;
         if (!File.Exists(_filePath))
         {
-            _encryptedByKey = new Dictionary<string, string>();
-            return;
+            loaded = [];
+        }
+        else
+        {
+            await using var stream = File.OpenRead(_filePath);
+            loaded = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(stream, cancellationToken: cancellationToken)
+                ?? [];
         }
 
-        await using var stream = File.OpenRead(_filePath);
-        _encryptedByKey = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(stream, cancellationToken: cancellationToken)
-            ?? new Dictionary<string, string>();
+        lock (_syncRoot)
+        {
+            _encryptedByKey = loaded;
+        }
     }
 
     public async Task SaveAsync(CancellationToken cancellationToken = default)
     {
+        Dictionary<string, string> snapshot;
+        lock (_syncRoot)
+        {
+            snapshot = new Dictionary<string, string>(_encryptedByKey);
+        }
+
         var directory = Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrEmpty(directory))
         {
@@ -46,7 +63,7 @@ public sealed class SecretStore
         }
 
         await using var stream = File.Create(_filePath);
-        await JsonSerializer.SerializeAsync(stream, _encryptedByKey, SerializerOptions, cancellationToken);
+        await JsonSerializer.SerializeAsync(stream, snapshot, SerializerOptions, cancellationToken);
     }
 
     public void SetSecret(string key, string plaintextValue)
@@ -55,7 +72,12 @@ public sealed class SecretStore
         try
         {
             var encryptedBytes = _protector.Protect(plaintextBytes);
-            _encryptedByKey[key] = Convert.ToBase64String(encryptedBytes);
+            var encoded = Convert.ToBase64String(encryptedBytes);
+
+            lock (_syncRoot)
+            {
+                _encryptedByKey[key] = encoded;
+            }
         }
         finally
         {
@@ -73,7 +95,13 @@ public sealed class SecretStore
     /// </summary>
     public string? GetSecret(string key)
     {
-        if (!_encryptedByKey.TryGetValue(key, out var encoded))
+        string? encoded;
+        lock (_syncRoot)
+        {
+            _encryptedByKey.TryGetValue(key, out encoded);
+        }
+
+        if (encoded is null)
         {
             return null;
         }
@@ -90,5 +118,11 @@ public sealed class SecretStore
         }
     }
 
-    public void RemoveSecret(string key) => _encryptedByKey.Remove(key);
+    public void RemoveSecret(string key)
+    {
+        lock (_syncRoot)
+        {
+            _encryptedByKey.Remove(key);
+        }
+    }
 }

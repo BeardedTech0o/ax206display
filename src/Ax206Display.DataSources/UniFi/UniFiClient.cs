@@ -57,7 +57,7 @@ public sealed class UniFiClient : IUniFiClient
             ?? throw new InvalidOperationException("UniFi health endpoint returned an empty response body.");
 
         var subsystems = body.Data
-            .Select(d => new UniFiSubsystemHealth(d.Subsystem, d.Status))
+            .Select(d => new UniFiSubsystemHealth(d.Subsystem, d.Status, d.NumUser, d.RxBytesPerSecond, d.TxBytesPerSecond))
             .ToList();
 
         return new UniFiSiteStatus(subsystems);
@@ -78,5 +78,14 @@ public sealed class UniFiClient : IUniFiClient
 
         [JsonPropertyName("status")]
         public string Status { get; set; } = string.Empty;
+
+        [JsonPropertyName("num_user")]
+        public int NumUser { get; set; }
+
+        [JsonPropertyName("rx_bytes-r")]
+        public double RxBytesPerSecond { get; set; }
+
+        [JsonPropertyName("tx_bytes-r")]
+        public double TxBytesPerSecond { get; set; }
     }
 }

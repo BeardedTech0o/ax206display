@@ -24,12 +24,23 @@ public sealed class LibUsbAx206Transport : IAx206Transport
     {
         _device = device;
         DeviceId = deviceId;
+        LocationId = device.LocationId;
         _timeoutMs = (int)(timeout ?? BulkOnlyTransport.DefaultTransferTimeout).TotalMilliseconds;
         _writer = device.OpenEndpointWriter(WriteEndpointID.Ep01, EndpointType.Bulk);
         _reader = device.OpenEndpointReader(ReadEndpointID.Ep01, 1024 * 1024, EndpointType.Bulk);
     }
 
-    public string DeviceId { get; }
+    /// <summary>
+    /// Settable (not just init) so <see cref="LibUsbAx206DeviceDiscovery"/> can
+    /// disambiguate this ID after construction, once it knows whether another
+    /// device on the same scan reported the same USB serial number - some
+    /// generic/clone AX206 panels burn an identical, non-unique serial into
+    /// every unit of a firmware batch.
+    /// </summary>
+    public string DeviceId { get; internal set; }
+
+    /// <summary>The USB port this device is currently attached to - used only to disambiguate a duplicate serial number, see <see cref="DeviceId"/>.</summary>
+    internal LibUsbDotNet.Info.LocationId LocationId { get; }
 
     public async Task<LcdParametersResponse> GetLcdParametersAsync(CancellationToken cancellationToken = default)
     {

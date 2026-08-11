@@ -3,8 +3,11 @@ using Ax206Display.App.Services;
 using Ax206Display.App.Views;
 using Ax206Display.Config.Secrets;
 using Ax206Display.Config.Services;
+using Ax206Display.DataSources.Network;
+using Ax206Display.DataSources.Proxmox;
 using Ax206Display.DataSources.SystemMonitor;
 using Ax206Display.DataSources.Weather;
+using Ax206Display.Rendering.Playback;
 using Ax206Display.Transport.Discovery;
 using Ax206Display.Transport.LibUsb;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,11 +35,24 @@ public static class HostFactory
 
         services.AddSingleton<IAx206DeviceDiscovery, LibUsbAx206DeviceDiscovery>();
         services.AddSingleton<ISystemMonitorSource, LibreHardwareMonitorSystemSource>();
+        services.AddSingleton<INetworkSpeedSource, NetworkInterfaceSpeedSource>();
         services.AddHttpClient<IWeatherSource, OpenMeteoWeatherSource>();
+
+        services.AddSingleton<RenderDataHub>();
+        services.AddSingleton<IRenderDataProvider>(sp => sp.GetRequiredService<RenderDataHub>());
+        services.AddSingleton<ProxmoxGuestDirectory>();
+        services.AddSingleton<ProxmoxNodeDirectory>();
 
         services.AddSingleton<TrayIconHostedService>();
         services.AddHostedService(sp => sp.GetRequiredService<TrayIconHostedService>());
-        services.AddHostedService<DisplayManagerHostedService>();
+        services.AddHostedService<SystemMonitorPumpService>();
+        services.AddHostedService<NetworkSpeedPumpService>();
+        services.AddHostedService<ProxmoxPumpService>();
+        services.AddHostedService<PiHolePumpService>();
+        services.AddHostedService<UniFiPumpService>();
+        services.AddSingleton<DisplayManagerHostedService>();
+        services.AddHostedService(sp => sp.GetRequiredService<DisplayManagerHostedService>());
         services.AddTransient<WidgetDesignerWindow>();
+        services.AddTransient<IntegrationsWindow>();
     }
 }

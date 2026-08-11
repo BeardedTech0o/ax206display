@@ -50,6 +50,28 @@ public class FrameCompositorTests
         Assert.Equal(SKColors.Black, frame.GetPixel(1, 1));
     }
 
+    [Fact]
+    public void ComposeFrame_WithBackgroundImage_DrawsItBeneathWidgets()
+    {
+        var compositor = new FrameCompositor(20, 20, SKColors.Black);
+        using var background = new SKBitmap(4, 4, SKColorType.Rgb565, SKAlphaType.Opaque);
+        background.Erase(SKColors.Green);
+
+        var widget = new SolidColorWidget("fill", 5, 5, SKColors.White);
+        var context = EmptyContext();
+
+        using var frame = compositor.ComposeFrame([new WidgetPlacement(widget, 10, 10, ZOrder: 0)], context, background);
+
+        // Stretched to fill the whole canvas, so any point outside the
+        // widget's placement should show the background image's color
+        // instead of the plain background color.
+        var pixel = frame.GetPixel(1, 1);
+        Assert.Equal(new SKColor(pixel.Red, pixel.Green, pixel.Blue), Quantize(SKColors.Green));
+
+        // Still drawn beneath the widget.
+        AssertApproximatelyWhite(frame.GetPixel(12, 12));
+    }
+
     private static WidgetRenderContext EmptyContext() => new()
     {
         Now = DateTimeOffset.UtcNow,

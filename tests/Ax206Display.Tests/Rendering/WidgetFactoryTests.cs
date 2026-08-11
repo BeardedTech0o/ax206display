@@ -42,6 +42,92 @@ public class WidgetFactoryTests
         Assert.Contains("weather", ex.Message);
     }
 
+    [Fact]
+    public void Create_TextWidget()
+    {
+        var config = MakeConfig("text");
+        config.Settings["text"] = "Hello";
+
+        var widget = WidgetFactory.Create(config);
+
+        Assert.IsType<TextWidget>(widget);
+    }
+
+    [Fact]
+    public void Create_StatWidget()
+    {
+        var config = MakeConfig("stat");
+        config.Settings["dataKey"] = "system.cpu.load";
+        config.Settings["label"] = "CPU";
+        config.Settings["unit"] = "%";
+        config.Settings["decimals"] = 1;
+
+        var widget = WidgetFactory.Create(config);
+
+        Assert.IsType<SystemStatWidget>(widget);
+    }
+
+    [Fact]
+    public void Create_ClockWithFontFamilySetting_UsesIt()
+    {
+        var config = MakeConfig("clock");
+        config.Settings["fontFamily"] = "Consolas";
+
+        var widget = WidgetFactory.Create(config);
+
+        Assert.IsType<ClockWidget>(widget);
+    }
+
+    [Fact]
+    public void Create_ClockWithBoldItalicAndFontScaleSettings_UsesThem()
+    {
+        var config = MakeConfig("clock");
+        config.Settings["bold"] = true;
+        config.Settings["italic"] = true;
+        config.Settings["fontScale"] = 1.25;
+
+        var widget = WidgetFactory.Create(config);
+
+        Assert.IsType<ClockWidget>(widget);
+    }
+
+    [Fact]
+    public void Create_StatWidgetWithoutDataKey_Throws()
+    {
+        var config = MakeConfig("stat");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => WidgetFactory.Create(config));
+        Assert.Contains("dataKey", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Create_GaugeWidget()
+    {
+        var config = MakeConfig("gauge");
+        config.Settings["dataKey"] = "system.cpu.load";
+        config.Settings["label"] = "CPU";
+        config.Settings["unit"] = "%";
+        config.Settings["decimals"] = 1;
+        config.Settings["minValue"] = 0;
+        config.Settings["maxValue"] = 100;
+        config.Settings["valueFontSizePx"] = 32;
+        config.Settings["labelGapPx"] = 12;
+        config.Settings["gaugeColor"] = "#D7FF3E";
+
+        var widget = WidgetFactory.Create(config);
+
+        Assert.IsType<GaugeWidget>(widget);
+    }
+
+    [Fact]
+    public void Create_GaugeWidgetWithoutDataKey_Throws()
+    {
+        var config = MakeConfig("gauge");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => WidgetFactory.Create(config));
+        Assert.Contains("dataKey", ex.Message, StringComparison.Ordinal);
+    }
+
     private static WidgetConfig MakeConfig(string type) => new()
     {
         Id = "widget-1",

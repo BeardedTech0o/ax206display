@@ -3,15 +3,76 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:skia="clr-namespace:SkiaSharp.Views.WPF;assembly=SkiaSharp.Views.WPF"
         Title="Ax206Display - Widget Designer"
-        Height="420" Width="640"
-        WindowStartupLocation="CenterScreen">
-    <DockPanel Margin="12">
-        <TextBlock DockPanel.Dock="Top"
-                   Margin="0,0,0,12"
-                   TextWrapping="Wrap"
-                   Text="M1 scaffold preview: this renders a clock widget end-to-end through the real compositor and pixel pipeline used to drive a physical display. The full form-based widget editor (add/remove/configure widgets per device) is a later milestone."/>
-        <Border DockPanel.Dock="Bottom" Background="Black" Height="320" Width="480" HorizontalAlignment="Center">
-            <skia:SKElement x:Name="PreviewElement" PaintSurface="OnPaintSurface"/>
+        Height="640" Width="960"
+        MinHeight="480" MinWidth="720"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource SurfaceBrush}"
+        Foreground="{StaticResource TextBrush}"
+        FontFamily="{StaticResource AppFontFamily}"
+        PreviewKeyDown="OnWindowPreviewKeyDown">
+    <DockPanel Margin="10" Background="{StaticResource SurfaceBrush}">
+        <!--
+            WrapPanel, not StackPanel: a horizontal StackPanel never wraps,
+            so on a narrow/resized window its overflow content (the Save
+            button, in practice) silently extends past the visible window
+            bounds instead of being reachable. WrapPanel drops extra buttons
+            to a second line instead - nothing is ever off-view.
+        -->
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <TextBlock Text="Device:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <ComboBox x:Name="DeviceComboBox" Width="200" DisplayMemberPath="Name" SelectionChanged="OnDeviceSelectionChanged"/>
+            <Button x:Name="RefreshDevicesButton" Content="Refresh" Margin="4,0,0,0" Padding="10,4" Click="OnRefreshDevicesClick"/>
+            <Button x:Name="RenameDeviceButton" Content="Rename" Margin="4,0,0,0" Padding="10,4" Click="OnRenameDeviceClick" IsEnabled="False"/>
+            <Button x:Name="RemoveDeviceButton" Content="Remove Device" Margin="4,0,0,0" Padding="10,4" Click="OnRemoveDeviceClick" IsEnabled="False"/>
+
+            <Separator Margin="14,0" Width="1"/>
+
+            <TextBlock Text="Add widget:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <Button x:Name="AddClockButton" Content="Clock" Margin="0,0,4,0" Padding="10,4" Click="OnAddClockClick"/>
+            <Button x:Name="AddTextButton" Content="Text" Margin="0,0,4,0" Padding="10,4" Click="OnAddTextClick"/>
+            <Button x:Name="AddStatButton" Content="System Stat" Margin="0,0,4,0" Padding="10,4" Click="OnAddStatClick"/>
+            <Button x:Name="AddGaugeButton" Content="Gauge" Margin="0,0,14,0" Padding="10,4" Click="OnAddGaugeClick"/>
+
+            <Button x:Name="DeleteButton" Content="Delete Selected" Margin="0,0,14,0" Padding="10,4" Click="OnDeleteClick" IsEnabled="False"/>
+            <Button x:Name="SaveButton" Content="Save" Padding="16,4" Style="{StaticResource AccentButtonStyle}" Click="OnSaveClick" IsEnabled="False"/>
+
+            <TextBlock x:Name="StatusText" Margin="14,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Text2Brush}" TextWrapping="Wrap"/>
+        </WrapPanel>
+
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <Button x:Name="BackgroundButton" Content="Background..." Margin="0,0,4,0" Padding="10,4" Click="OnBackgroundClick"/>
+            <Button x:Name="ClearBackgroundButton" Content="Clear Background" Margin="0,0,14,0" Padding="10,4" Click="OnClearBackgroundClick"/>
+            <CheckBox x:Name="ShowGridCheckBox" Content="Show Grid" VerticalAlignment="Center" Checked="OnShowGridChanged" Unchecked="OnShowGridChanged"/>
+
+            <Separator Margin="14,0" Width="1"/>
+
+            <TextBlock Text="Brightness:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <Slider x:Name="BrightnessSlider" Width="120" Minimum="0" Maximum="7" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="OnBrightnessChanged"/>
+            <TextBlock x:Name="BrightnessValueText" VerticalAlignment="Center" Margin="6,0,0,0" Width="14"/>
+        </WrapPanel>
+
+        <Border DockPanel.Dock="Right" Width="240" Margin="10,0,0,0" Background="{StaticResource Surface2Brush}" BorderBrush="{StaticResource ForgeBorderBrush}" BorderThickness="1" CornerRadius="{StaticResource CardCornerRadius}" Padding="10">
+            <!--
+                A widget with many fields (the gauge's Reading/Label/Unit/
+                Decimals/Min/Max/Gauge color/Text color/Font/Size can exceed
+                this panel's fixed height, especially on a shorter window -
+                ScrollViewer keeps every field reachable instead of the
+                bottom ones being silently clipped by the Border.
+            -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="PropertyPanel">
+                    <TextBlock Text="Select a widget to edit its properties, or add a new one above." TextWrapping="Wrap" Foreground="{StaticResource Text2Brush}"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <Border Background="#000000" BorderBrush="{StaticResource ForgeBorderBrush}" BorderThickness="1" CornerRadius="{StaticResource CardCornerRadius}">
+            <Viewbox Stretch="Uniform" Margin="16">
+                <Grid x:Name="DesignerRoot" Width="1" Height="1">
+                    <skia:SKElement x:Name="PreviewElement" PaintSurface="OnPaintSurface"/>
+                    <Canvas x:Name="OverlayCanvas" Background="Transparent" Focusable="True" FocusVisualStyle="{x:Null}"/>
+                </Grid>
+            </Viewbox>
         </Border>
     </DockPanel>
 </Window>

@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Ax206Display.Config.Models;
 using SkiaSharp;
 
@@ -16,6 +17,9 @@ public static class WidgetFactory
         return config.Type switch
         {
             "clock" => CreateClock(config),
+            "text" => CreateText(config),
+            "stat" => CreateStat(config),
+            "gauge" => CreateGauge(config),
             _ => throw new NotSupportedException($"Unknown widget type '{config.Type}' (widget id '{config.Id}')."),
         };
     }
@@ -23,13 +27,106 @@ public static class WidgetFactory
     private static ClockWidget CreateClock(WidgetConfig config)
     {
         var timeFormat = config.Settings["timeFormat"]?.GetValue<string>() ?? "HH:mm:ss";
+        return new ClockWidget(config.Id, config.Width, config.Height, timeFormat, ReadTextColor(config), ReadFontStyle(config));
+    }
 
-        SKColor? textColor = null;
-        if (config.Settings["textColor"]?.GetValue<string>() is { } textColorHex && SKColor.TryParse(textColorHex, out var parsedColor))
+    private static TextWidget CreateText(WidgetConfig config)
+    {
+        var text = config.Settings["text"]?.GetValue<string>() ?? string.Empty;
+        return new TextWidget(config.Id, config.Width, config.Height, text, ReadTextColor(config), ReadFontStyle(config));
+    }
+
+    private static SystemStatWidget CreateStat(WidgetConfig config)
+    {
+        var dataKey = config.Settings["dataKey"]?.GetValue<string>()
+            ?? throw new InvalidOperationException($"Stat widget '{config.Id}' is missing the required 'dataKey' setting.");
+
+        var label = config.Settings["label"]?.GetValue<string>() ?? string.Empty;
+        var unit = config.Settings["unit"]?.GetValue<string>() ?? string.Empty;
+        var decimals = config.Settings["decimals"]?.GetValue<int>() ?? 0;
+
+        return new SystemStatWidget(config.Id, config.Width, config.Height, dataKey, label, unit, decimals, ReadTextColor(config), ReadFontStyle(config));
+    }
+
+    private static GaugeWidget CreateGauge(WidgetConfig config)
+    {
+        var dataKey = config.Settings["dataKey"]?.GetValue<string>()
+            ?? throw new InvalidOperationException($"Gauge widget '{config.Id}' is missing the required 'dataKey' setting.");
+
+        var label = config.Settings["label"]?.GetValue<string>() ?? string.Empty;
+        var unit = config.Settings["unit"]?.GetValue<string>() ?? string.Empty;
+        var decimals = config.Settings["decimals"]?.GetValue<int>() ?? 0;
+        var minValue = ReadDouble(config.Settings["minValue"]) ?? 0;
+        var maxValue = ReadDouble(config.Settings["maxValue"]) ?? 100;
+        var valueFontSizePx = (float?)ReadDouble(config.Settings["valueFontSizePx"]);
+        var labelGapPx = (float)(ReadDouble(config.Settings["labelGapPx"]) ?? 0);
+
+        return new GaugeWidget(
+            config.Id,
+            config.Width,
+            config.Height,
+            dataKey,
+            label,
+            unit,
+            decimals,
+            minValue,
+            maxValue,
+            valueFontSizePx,
+            labelGapPx,
+            ReadColor(config, "gaugeColor"),
+            ReadTextColor(config),
+            ReadFontStyle(config));
+    }
+
+    private static SKColor? ReadTextColor(WidgetConfig config) => ReadColor(config, "textColor");
+
+    private static SKColor? ReadColor(WidgetConfig config, string settingKey)
+    {
+        if (config.Settings[settingKey]?.GetValue<string>() is { } hex && SKColor.TryParse(hex, out var parsedColor))
         {
-            textColor = parsedColor;
+            return parsedColor;
         }
 
-        return new ClockWidget(config.Id, config.Width, config.Height, timeFormat, textColor);
+        return null;
+    }
+
+    private static WidgetFontStyle ReadFontStyle(WidgetConfig config)
+    {
+        return new WidgetFontStyle(
+            FontFamily: config.Settings["fontFamily"]?.GetValue<string>(),
+            Bold: config.Settings["bold"]?.GetValue<bool>() ?? false,
+            Italic: config.Settings["italic"]?.GetValue<bool>() ?? false,
+            // fontScale is the legacy relative-size setting - still read so
+            // layouts saved before fontSizePx existed render unchanged.
+            SizeScale: (float)(ReadDouble(config.Settings["fontScale"]) ?? 1.0),
+            FixedSizePixels: (float?)ReadDouble(config.Settings["fontSizePx"]));
+    }
+
+    /// <summary>
+    /// Reads a numeric setting whether the node came from parsed JSON or was
+    /// assigned in memory. GetValue&lt;double&gt;() alone throws for an
+    /// in-memory JsonValue created from an int (no implicit numeric
+    /// conversion) - which is exactly what the designer's live preview
+    /// produces between assigning a setting and saving it to disk.
+    /// </summary>
+    private static double? ReadDouble(JsonNode? node)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        var value = node.AsValue();
+        if (value.TryGetValue<double>(out var asDouble))
+        {
+            return asDouble;
+        }
+
+        if (value.TryGetValue<int>(out var asInt))
+        {
+            return asInt;
+        }
+
+        return null;
     }
 }
