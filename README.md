@@ -10,6 +10,13 @@ reverse-derives it from public reference implementations - see
 [`docs/protocol-spec.md`](docs/protocol-spec.md) for the full write-up,
 citations, and known gaps.
 
+## Download
+
+Prebuilt Windows executables are published on the
+[Releases page](https://github.com/BeardedTech0o/ax206display/releases) -
+grab the latest `Ax206Display-*-win-x64.exe`, no separate .NET install
+required.
+
 ## Status
 
 Currently at the **M1 scaffold** milestone: solution structure, the USB
