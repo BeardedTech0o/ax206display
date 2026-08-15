@@ -44,7 +44,12 @@
            the standard WiX idiom of using a component-local registry value
            as the KeyPath instead - it also doubles as the uninstall marker
            Windows Installer needs to know this component was ever
-           installed. -->
+           installed. This keypath must be HKCU even though the package as a
+           whole is perMachine: ProgramMenuFolder is always treated as a
+           potentially-per-user location by Windows Installer's ICE
+           validation, so a per-machine (HKLM) keypath there fails
+           ICE38/ICE43/ICE57 at build time - confirmed by actually hitting
+           that failure. -->
       <Component Id="ApplicationShortcut" Guid="*">
         <Shortcut Id="ApplicationStartMenuShortcut"
                    Name="Ax206 Display"
@@ -52,7 +57,7 @@
                    WorkingDirectory="INSTALLFOLDER"
                    Icon="AppIcon.ico" />
         <RemoveFolder Id="RemoveProgramMenuFolder" On="uninstall" />
-        <RegistryValue Root="HKLM" Key="Software\BeardedTech0o\Ax206Display" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="Software\BeardedTech0o\Ax206Display" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </StandardDirectory>
 

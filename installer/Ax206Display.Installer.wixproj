@@ -2,6 +2,11 @@
 
   <PropertyGroup>
     <OutputName>Ax206Display</OutputName>
+    <!-- Must match the published exe's RID (win-x64): without this WiX
+         defaults to x86 and building fails ICE80 for placing a 32-bit
+         component (the exe) under the 64-bit ProgramFiles64Folder used
+         below. -->
+    <Platform>x64</Platform>
     <!-- MSI Package/@Version needs a plain N.N.N(.N) number - the release
          workflow passes this in with the tag's leading "v" stripped
          (-p:ProductVersion=1.0.1 for tag v1.0.1). This default is only ever
