@@ -10,6 +10,8 @@ reverse-derives it from public reference implementations - see
 [`docs/protocol-spec.md`](docs/protocol-spec.md) for the full write-up,
 citations, and known gaps.
 
+![The Widget Designer, editing a Pi-hole layout across three displays](docs/images/widget-designer.jpg)
+
 ## Download
 
 Prebuilt Windows builds are published on the
