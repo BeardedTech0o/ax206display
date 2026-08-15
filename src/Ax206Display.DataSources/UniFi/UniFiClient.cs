@@ -57,13 +57,47 @@ public sealed class UniFiClient : IUniFiClient
 
         using (response)
         {
-            response.EnsureSuccessStatusCode();
+            await EnsureSuccessWithBodyAsync(response, cancellationToken);
 
             if (response.Headers.TryGetValues("X-CSRF-Token", out var values))
             {
                 _csrfToken = values.FirstOrDefault();
             }
         }
+    }
+
+    /// <summary>
+    /// Same job as <see cref="HttpResponseMessage.EnsureSuccessStatusCode"/>,
+    /// but the exception message includes the response body - UniFi OS
+    /// returns a JSON error body (e.g. api.err.InvalidPayload,
+    /// api.err.Invalid for a rejected 2FA token) that
+    /// EnsureSuccessStatusCode's bare "status code 400 (Bad Request)"
+    /// discards, which is exactly the detail needed to tell "wrong
+    /// password" apart from "wrong/stale TOTP code" apart from "clock skew"
+    /// apart from something else entirely.
+    /// </summary>
+    private static async Task EnsureSuccessWithBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        string? body = null;
+        try
+        {
+            body = await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Worst case we fall back to the bare status code below - still
+            // strictly better than crashing the whole login attempt trying
+            // to fetch extra diagnostic detail for the error we're already
+            // in the middle of reporting.
+        }
+
+        var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $": {body.Trim()}";
+        throw new HttpRequestException($"UniFi request failed with status {(int)response.StatusCode} ({response.StatusCode}){detail}");
     }
 
     private async Task<HttpResponseMessage> SendLoginRequestAsync(string username, string password, string? token, CancellationToken cancellationToken)
@@ -85,7 +119,7 @@ public sealed class UniFiClient : IUniFiClient
         }
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessWithBodyAsync(response, cancellationToken);
 
         var body = await response.Content.ReadFromJsonAsync<HealthResponse>(cancellationToken: cancellationToken)
             ?? throw new InvalidOperationException("UniFi health endpoint returned an empty response body.");

@@ -54,6 +54,21 @@ public class UniFiClientTests
     }
 
     [Fact]
+    public async Task LoginAsync_IncludesResponseBodyInExceptionMessageWhenLoginFails()
+    {
+        var handler = new FakeHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent("""{"errorCode":400,"message":"api.err.Invalid"}""", Encoding.UTF8, "application/json"),
+            });
+        var client = CreateClient(handler);
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => client.LoginAsync("admin", "password"));
+
+        Assert.Contains("api.err.Invalid", exception.Message);
+    }
+
+    [Fact]
     public async Task LoginAsync_ThrowsWithoutRetryingWhenServerRequiresTwoFactorButNoSecretConfigured()
     {
         var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage((HttpStatusCode)499));
