@@ -32,8 +32,11 @@ public class UniFiClientTests
         await client.LoginAsync("admin", "password", totpSecret);
 
         Assert.Equal(2, requestBodies.Count);
+        // UniFi OS's schema validation rejects "token":null outright (400
+        // VALIDATION_ERROR) - the field must be omitted entirely, not
+        // present-but-null, on this first no-token attempt.
+        Assert.DoesNotContain("token", requestBodies[0]);
         var expectedCode = TotpGenerator.GenerateCode(totpSecret);
-        Assert.DoesNotContain(expectedCode, requestBodies[0]);
         Assert.Contains(expectedCode, requestBodies[1]);
     }
 

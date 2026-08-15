@@ -131,7 +131,14 @@ public sealed class UniFiClient : IUniFiClient
         return new UniFiSiteStatus(subsystems);
     }
 
-    private sealed record LoginRequest(string Username, string Password, bool RememberMe, string? Token = null);
+    // UniFi OS's own request-schema validation rejects an explicit
+    // "token":null with 400 VALIDATION_ERROR ("Expected string, received
+    // null") - it needs the field omitted entirely on the no-token first
+    // attempt, not present-but-null. Confirmed by hitting exactly that
+    // error: System.Text.Json includes null properties by default, so
+    // without this the very first login attempt (before UniFi OS has even
+    // had a chance to say 2FA is required) always failed.
+    private sealed record LoginRequest(string Username, string Password, bool RememberMe, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Token = null);
 
     private sealed class HealthResponse
     {
