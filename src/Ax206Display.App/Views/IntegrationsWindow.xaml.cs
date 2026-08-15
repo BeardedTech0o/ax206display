@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using Ax206Display.Config.Models;
 using Ax206Display.Config.Secrets;
 using Ax206Display.Config.Services;
+using Ax206Display.DataSources.Auth;
 using Ax206Display.DataSources.Http;
 using Ax206Display.DataSources.PiHole;
 using Ax206Display.DataSources.Proxmox;
@@ -201,6 +202,9 @@ public partial class IntegrationsWindow : Window
     private async void OnUniFiTestAndSaveClick(object sender, RoutedEventArgs e)
     {
         SetUniFiStatus("Testing...");
+        // Declared outside the try so the catch block can still use it - see
+        // its use there for why.
+        string? totpSecret = null;
         try
         {
             var baseUrl = UniFiUrlTextBox.Text.Trim();
@@ -226,7 +230,7 @@ public partial class IntegrationsWindow : Window
 
             // Null when the account has no 2FA - the common case. See
             // IntegrationConfig.TotpSecretKey and UniFiClient.LoginAsync.
-            var totpSecret = await ResolveSecretByKeyAsync(UniFiTotpSecretBox.Password, existing?.TotpSecretKey);
+            totpSecret = await ResolveSecretByKeyAsync(UniFiTotpSecretBox.Password, existing?.TotpSecretKey);
 
             var integrationId = existing?.Id ?? Guid.NewGuid().ToString("N");
             var secretKey = existing?.SecretKey ?? $"integration.{integrationId}";
@@ -256,7 +260,32 @@ public partial class IntegrationsWindow : Window
         }
         catch (Exception ex)
         {
-            SetUniFiStatus("Failed: " + ex.Message);
+            // UniFi OS reports a wrong TOTP code with the exact same
+            // AUTHENTICATION_FAILED_INVALID_CREDENTIALS code/message it uses
+            // for a wrong password - there's no way to tell them apart from
+            // the error alone. Showing what this secret computes right now
+            // lets a "this is definitely my password" report get checked
+            // directly against the authenticator app instead of guessing
+            // further - a mismatch here means the saved secret itself is
+            // wrong (e.g. a transcription slip if it was hand-typed rather
+            // than copy-pasted), not anything about the password.
+            var totpHint = string.IsNullOrEmpty(totpSecret)
+                ? string.Empty
+                : TryComputeTotpHint(totpSecret);
+            SetUniFiStatus("Failed: " + ex.Message + totpHint);
+        }
+    }
+
+    private static string TryComputeTotpHint(string totpSecret)
+    {
+        try
+        {
+            var code = TotpGenerator.GenerateCode(totpSecret);
+            return $" (The TOTP secret currently entered computes {code} right now - compare it against your authenticator app at this same moment. If they don't match, the saved secret itself is wrong.)";
+        }
+        catch (FormatException)
+        {
+            return " (The TOTP secret currently entered isn't valid base32, so no code could even be computed from it - re-check what was pasted into that field.)";
         }
     }
 
