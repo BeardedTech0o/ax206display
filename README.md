@@ -81,7 +81,20 @@ and their in-memory buffers are zeroed after use. The app currently runs
 elevated (`requireAdministrator`) for USB/Task Scheduler access; see
 [`docs/privilege-separation.md`](docs/privilege-separation.md) for a proposed
 design to shrink that to a minimal elevated broker process in a future
-milestone. The build enforces `TreatWarningsAsErrors` with
+milestone.
+
+UniFi login needs a **local-access-only** admin account - a cloud/SSO-linked
+account can fail to authenticate through the API in confusing ways (e.g. a
+generic "invalid credentials" response even with the right password) that
+have nothing to do with this app. If Test & Save keeps failing, check
+Settings &rarr; Admins &rarr; the account in question and confirm it's set to
+local access rather than linked to a Ubiquiti cloud account. If you'd rather
+keep 2FA enabled on that account instead of switching it to local-only, the
+app supports that too (`IntegrationConfig.TotpSecretKey`, computed via
+`Ax206Display.DataSources.Auth.TotpGenerator`) - enter the base32 setup
+key/secret from when you enabled 2FA, not a live 6-digit code.
+
+The build enforces `TreatWarningsAsErrors` with
 `AnalysisLevel=latest-recommended`, pins the full dependency graph via
 `packages.lock.json` + `Directory.Packages.props`, and gates CI on
 `NuGetAudit`/`dotnet list package --vulnerable`.
