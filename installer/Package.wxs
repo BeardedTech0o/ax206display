@@ -38,10 +38,19 @@
       <Directory Id="INSTALLFOLDER" Name="Ax206Display">
         <Component Id="MainExecutable" Guid="*">
           <File Id="Ax206DisplayExe" Source="$(var.AppPublishDir)\Ax206Display.exe" KeyPath="yes" />
-          <!-- Windows' default DLL search order checks the exe's own
-               directory first, so sitting here is all libusb-1.0.dll needs
-               to be found - no registration or PATH entry required. -->
-          <File Id="LibUsbDll" Source="$(var.AppPublishDir)\libusb-1.0.dll" />
+        </Component>
+        <!-- A separate component, not a second File on MainExecutable: an
+             auto-generated Component/@Guid ("*") only allows more than one
+             file when the non-keypath ones are unversioned, and
+             libusb-1.0.dll (unlike a bare data file) carries a real PE
+             version resource - confirmed by actually hitting WIX0368 for
+             this. One file per component is also just standard WiX
+             practice regardless. Windows' default DLL search order checks
+             the exe's own directory first, so sitting here next to it is
+             all libusb-1.0.dll needs to be found - no registration or PATH
+             entry required. -->
+        <Component Id="LibUsbDll" Guid="*">
+          <File Id="LibUsbDllFile" Source="$(var.AppPublishDir)\libusb-1.0.dll" KeyPath="yes" />
         </Component>
       </Directory>
     </StandardDirectory>
@@ -70,6 +79,7 @@
 
     <Feature Id="Main">
       <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="LibUsbDll" />
       <ComponentRef Id="ApplicationShortcut" />
     </Feature>
 
