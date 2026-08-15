@@ -19,8 +19,10 @@ separate .NET install required either way:
 - `Ax206Display-*-win-x64.msi` - the installer (recommended): adds a Start
   Menu shortcut and an Add/Remove Programs entry, and cleanly replaces the
   previous version on your next update instead of you hand-swapping exes.
-- `Ax206Display-*-win-x64.exe` - the same app as a single portable exe, for
-  running without installing anything.
+- `Ax206Display-*-win-x64.zip` - the same app as a portable exe, for running
+  without installing anything. It's a zip rather than a bare exe because
+  Ax206Display.exe needs its bundled libusb-1.0.dll sitting right next to
+  it - keep both files together wherever you unzip it.
 
 ## Status
 

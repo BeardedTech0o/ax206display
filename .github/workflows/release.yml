@@ -46,10 +46,12 @@ jobs:
           dotnet-version: "8.0.x"
 
       # Self-contained + single-file so the download just works: no separate
-      # .NET Desktop Runtime install required on the user's machine. Native
-      # dependencies (libusb, Skia) are bundled inside the exe and
-      # self-extracted to a temp dir on first run rather than left as sibling
-      # DLLs, to keep this an actual single-file download.
+      # .NET Desktop Runtime install required on the user's machine.
+      # IncludeNativeLibrariesForSelfExtract only bundles native assets that
+      # are already part of the NuGet dependency graph's runtimes/ folders -
+      # LibUsbDotNet's package ships no such asset (it's a pure P/Invoke
+      # wrapper), so libusb-1.0.dll is NOT bundled here despite this flag.
+      # It's fetched as a real sibling file by the next step instead.
       - name: Publish self-contained single-file exe
         run: >
           dotnet publish src/Ax206Display.App/Ax206Display.App.csproj
@@ -60,6 +62,34 @@ jobs:
           -p:IncludeNativeLibrariesForSelfExtract=true
           -p:EnableCompressionInSingleFile=true
           --output publish
+
+      # LibUsbDotNet doesn't ship the native libusb-1.0.dll it P/Invokes into
+      # (confirmed: its NuGet package has no runtimes/ folder at all) - every
+      # released build has needed this DLL placed next to the exe by hand, or
+      # the app fails at startup with a DllNotFoundException (see
+      # App.xaml.cs's ReportFatalStartupError, which already has a hint for
+      # exactly this). Fetching the official prebuilt binary here, pinned by
+      # SHA256, means neither the zip nor the MSI needs the user to do that
+      # themselves. VS2022/MS64 matches the app's own win-x64 publish target;
+      # 7z is preinstalled on windows-latest runners.
+      - name: Fetch libusb-1.0.dll
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $archiveUrl = "https://github.com/libusb/libusb/releases/download/v1.0.30/libusb-1.0.30.7z"
+          $expectedHash = "7FB1DFEC805B97983763D7D0AE244320DA12ADD1003D4249C96CC4D586398C79"
+          $archivePath = Join-Path $env:RUNNER_TEMP "libusb-1.0.30.7z"
+
+          Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath
+          $actualHash = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash
+          if ($actualHash -ne $expectedHash) {
+            throw "libusb-1.0.30.7z checksum mismatch: expected $expectedHash, got $actualHash"
+          }
+
+          7z e $archivePath "VS2022/MS64/dll/libusb-1.0.dll" "-opublish" -y
+          if ($LASTEXITCODE -ne 0) {
+            throw "7z extraction failed with exit code $LASTEXITCODE"
+          }
 
       # No-op until WINDOWS_CODE_SIGNING_PFX_BASE64/_PASSWORD are configured
       # as repo secrets - see the identical step in ci.yml for the full story
@@ -103,16 +133,21 @@ jobs:
             Remove-Item -Path $pfxPath -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Rename and checksum the published exe and installer
+      - name: Package and checksum the portable zip and installer
         id: asset
         shell: pwsh
         run: |
           $tag = "${{ steps.tag.outputs.tag }}"
 
-          $exeName = "Ax206Display-$tag-win-x64.exe"
-          Move-Item -Path "publish/Ax206Display.exe" -Destination $exeName
-          (Get-FileHash -Path $exeName -Algorithm SHA256).Hash.ToLower() + "  $exeName" | Out-File -FilePath "$exeName.sha256" -Encoding ascii
-          "exeName=$exeName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          # The portable download is a zip (exe + libusb-1.0.dll), not a bare
+          # exe: the exe alone can't find libusb-1.0.dll unless it's a
+          # sibling file in the same folder, so a standalone exe download
+          # would just be a different flavor of the crash this fetches to
+          # avoid.
+          $zipName = "Ax206Display-$tag-win-x64.zip"
+          Compress-Archive -Path "publish/Ax206Display.exe", "publish/libusb-1.0.dll" -DestinationPath $zipName
+          (Get-FileHash -Path $zipName -Algorithm SHA256).Hash.ToLower() + "  $zipName" | Out-File -FilePath "$zipName.sha256" -Encoding ascii
+          "zipName=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
           $msiSource = (Get-ChildItem -Path installer/bin -Filter Ax206Display.msi -Recurse | Select-Object -First 1).FullName
           $msiName = "Ax206Display-$tag-win-x64.msi"
@@ -128,7 +163,7 @@ jobs:
           gh release create "${{ steps.tag.outputs.tag }}" `
             "${{ steps.asset.outputs.msiName }}" `
             "${{ steps.asset.outputs.msiName }}.sha256" `
-            "${{ steps.asset.outputs.exeName }}" `
-            "${{ steps.asset.outputs.exeName }}.sha256" `
+            "${{ steps.asset.outputs.zipName }}" `
+            "${{ steps.asset.outputs.zipName }}.sha256" `
             --title "${{ steps.tag.outputs.tag }}" `
             --generate-notes

@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <!--
-    Packages the self-contained single-file exe (published separately by
-    release.yml) as a proper per-machine MSI: Start Menu shortcut, an entry
-    in Add/Remove Programs, and - via MajorUpgrade below - an in-place
-    upgrade/downgrade-blocked install keyed off UpgradeCode, so installing a
-    newer release automatically removes the old version instead of a user
-    hand-replacing the exe at whatever path they happened to put it.
+    Packages the self-contained single-file exe and its sibling
+    libusb-1.0.dll (both published separately by release.yml - see that
+    workflow's "Fetch libusb-1.0.dll" step for why the DLL has to be a real
+    sibling file rather than bundled inside the exe) as a proper per-machine
+    MSI: Start Menu shortcut, an entry in Add/Remove Programs, and - via
+    MajorUpgrade below - an in-place upgrade/downgrade-blocked install keyed
+    off UpgradeCode, so installing a newer release automatically removes the
+    old version instead of a user hand-replacing the exe at whatever path
+    they happened to put it.
 
     perMachine (not perUser) because the app itself already always elevates
     on launch (app.manifest requires Administrator for USB/Task Scheduler
@@ -35,6 +38,10 @@
       <Directory Id="INSTALLFOLDER" Name="Ax206Display">
         <Component Id="MainExecutable" Guid="*">
           <File Id="Ax206DisplayExe" Source="$(var.AppPublishDir)\Ax206Display.exe" KeyPath="yes" />
+          <!-- Windows' default DLL search order checks the exe's own
+               directory first, so sitting here is all libusb-1.0.dll needs
+               to be found - no registration or PATH entry required. -->
+          <File Id="LibUsbDll" Source="$(var.AppPublishDir)\libusb-1.0.dll" />
         </Component>
       </Directory>
     </StandardDirectory>
