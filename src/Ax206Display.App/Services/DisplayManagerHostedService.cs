@@ -143,7 +143,13 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
 
         var config = await _configService.LoadAsync(cancellationToken);
         SeedKnownAmbiguousSerialNumbers(config);
-        var discovered = await DiscoverSafelyAsync(cancellationToken);
+
+        // Exclude every already-connected device from this scan: reopening
+        // one of their physical USB devices just to immediately discard the
+        // duplicate handle (see the TryAdd-fails branch below) can corrupt
+        // its live transport mid-blit and knock an otherwise-healthy display
+        // offline - see IAx206DeviceDiscovery.DiscoverAsync(excludeDeviceIds, ...).
+        var discovered = await DiscoverSafelyAsync(cancellationToken, _loopsByDeviceId.Keys.ToArray());
         var configChanged = false;
         var newDeviceCount = 0;
 
@@ -312,7 +318,12 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
 
     private async Task<IAx206Transport?> TryFindTransportAsync(string deviceId, CancellationToken cancellationToken)
     {
-        var discovered = await DiscoverSafelyAsync(cancellationToken);
+        // Exclude every device that's currently connected and running
+        // elsewhere - this scan only cares about deviceId, and touching the
+        // others' physical USB devices again while their loops are mid-blit
+        // is how one display reconnecting used to knock other, perfectly
+        // healthy displays offline too.
+        var discovered = await DiscoverSafelyAsync(cancellationToken, _loopsByDeviceId.Keys.ToArray());
 
         IAx206Transport? match = null;
         foreach (var transport in discovered)
@@ -338,12 +349,14 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
     /// concurrent reconnect attempts (e.g. two displays dropping around the
     /// same time) would otherwise race to open/claim the same USB devices.
     /// </summary>
-    private async Task<IReadOnlyList<IAx206Transport>> DiscoverSafelyAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<IAx206Transport>> DiscoverSafelyAsync(CancellationToken cancellationToken, IReadOnlyCollection<string>? excludeDeviceIds = null)
     {
         await _discoveryLock.WaitAsync(cancellationToken);
         try
         {
-            return await _discovery.DiscoverAsync(cancellationToken);
+            return excludeDeviceIds is { Count: > 0 }
+                ? await _discovery.DiscoverAsync(excludeDeviceIds, cancellationToken)
+                : await _discovery.DiscoverAsync(cancellationToken);
         }
         finally
         {

@@ -1,4 +1,5 @@
 using Ax206Display.Transport.Discovery;
+using LibUsbDotNet.Info;
 using LibUsbDotNet.LibUsb;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -17,6 +18,7 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
     private readonly ILogger<LibUsbAx206DeviceDiscovery> _logger;
 
     private readonly AmbiguousSerialTracker _ambiguousSerialTracker = new();
+    private readonly ActiveDeviceLocationTracker<LocationId> _activeLocationTracker = new();
 
     public LibUsbAx206DeviceDiscovery(ILogger<LibUsbAx206DeviceDiscovery>? logger = null)
     {
@@ -28,7 +30,10 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
         _ambiguousSerialTracker.Seed(serialNumbers);
     }
 
-    public async Task<IReadOnlyList<IAx206Transport>> DiscoverAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<IAx206Transport>> DiscoverAsync(CancellationToken cancellationToken = default)
+        => DiscoverAsync([], cancellationToken);
+
+    public async Task<IReadOnlyList<IAx206Transport>> DiscoverAsync(IReadOnlyCollection<string> excludeDeviceIds, CancellationToken cancellationToken = default)
     {
         var discovered = new List<LibUsbAx206Transport>();
 
@@ -43,6 +48,20 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
             foreach (var device in devices)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                // LocationId is derived straight from the device's bus/port
+                // numbers and doesn't require opening it, so this check runs
+                // before TryOpen/ClaimInterface - a device already claimed
+                // by another live transport is left completely untouched,
+                // rather than opened/claimed/probed a second time only to be
+                // thrown away moments later. See the interface doc comment
+                // on DiscoverAsync(excludeDeviceIds, ...) for why that
+                // second touch is actively harmful, not just wasted work.
+                if (excludeDeviceIds.Count > 0 && _activeLocationTracker.IsKnownLocationOf(device.LocationId, excludeDeviceIds))
+                {
+                    SafeDispose(device);
+                    continue;
+                }
 
                 var transport = await TryOpenAsDisplayAsync(device, cancellationToken);
                 if (transport is not null)
@@ -67,6 +86,12 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
         }
 
         DisambiguateDuplicateSerialNumbers(discovered);
+
+        foreach (var transport in discovered)
+        {
+            _activeLocationTracker.Remember(transport.DeviceId, transport.LocationId);
+        }
+
         return discovered;
     }
 
