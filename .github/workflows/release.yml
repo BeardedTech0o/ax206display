@@ -35,6 +35,10 @@ jobs:
         run: |
           $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          # The MSI Package/@Version needs a bare N.N.N number, not the tag's
+          # leading "v" - tags are required to match "v*.*.*" (see the `on:`
+          # trigger above), so this is always exactly the three-part version.
+          "version=$($tag.TrimStart('v'))" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -73,15 +77,48 @@ jobs:
             Remove-Item -Path $pfxPath -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Rename and checksum the published exe
+      # Packages the (now-signed) exe into a proper per-machine MSI - Start
+      # Menu shortcut, an Add/Remove Programs entry, and a clean upgrade/
+      # uninstall on the next release via installer/Package.wxs's
+      # MajorUpgrade, instead of a user hand-replacing the exe wherever they
+      # happened to put it. No separate WiX install needed here: the
+      # WixToolset.Sdk (pinned to 5.0.2 in the .wixproj, not a floating major
+      # version - see https://wixtoolset.org/osmf/ for why v6+ isn't used)
+      # is an ordinary NuGet-restored MSBuild SDK, so `dotnet build` below
+      # fetches everything it needs on its own.
+      - name: Build MSI installer
+        run: dotnet build installer/Ax206Display.Installer.wixproj --configuration Release -p:ProductVersion=${{ steps.tag.outputs.version }}
+
+      - name: Sign Ax206Display.msi
+        if: ${{ env.HAS_SIGNING_CERT == 'true' }}
+        shell: pwsh
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "ax206display-signing.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 }}"))
+          try {
+            $msiPath = (Get-ChildItem -Path installer/bin -Filter Ax206Display.msi -Recurse | Select-Object -First 1).FullName
+            & signtool.exe sign /f $pfxPath /p "${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}" `
+              /fd sha256 /tr http://timestamp.digicert.com /td sha256 $msiPath
+          } finally {
+            Remove-Item -Path $pfxPath -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Rename and checksum the published exe and installer
         id: asset
         shell: pwsh
         run: |
           $tag = "${{ steps.tag.outputs.tag }}"
+
           $exeName = "Ax206Display-$tag-win-x64.exe"
           Move-Item -Path "publish/Ax206Display.exe" -Destination $exeName
           (Get-FileHash -Path $exeName -Algorithm SHA256).Hash.ToLower() + "  $exeName" | Out-File -FilePath "$exeName.sha256" -Encoding ascii
           "exeName=$exeName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+          $msiSource = (Get-ChildItem -Path installer/bin -Filter Ax206Display.msi -Recurse | Select-Object -First 1).FullName
+          $msiName = "Ax206Display-$tag-win-x64.msi"
+          Move-Item -Path $msiSource -Destination $msiName
+          (Get-FileHash -Path $msiName -Algorithm SHA256).Hash.ToLower() + "  $msiName" | Out-File -FilePath "$msiName.sha256" -Encoding ascii
+          "msiName=$msiName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Create GitHub Release
         shell: pwsh
@@ -89,6 +126,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ steps.tag.outputs.tag }}" `
+            "${{ steps.asset.outputs.msiName }}" `
+            "${{ steps.asset.outputs.msiName }}.sha256" `
             "${{ steps.asset.outputs.exeName }}" `
             "${{ steps.asset.outputs.exeName }}.sha256" `
             --title "${{ steps.tag.outputs.tag }}" `

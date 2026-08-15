@@ -26,6 +26,10 @@ Thumbs.db
 publish/
 *.pubxml.user
 
+## WiX (installer/) - local `wix extension add` cache; the SDK-style build
+## itself restores everything it needs through ordinary NuGet, no extensions
+.wix/
+
 ## NuGet
 *.nupkg
 *.snupkg

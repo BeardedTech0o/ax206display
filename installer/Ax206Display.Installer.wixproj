@@ -1,0 +1,18 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <PropertyGroup>
+    <OutputName>Ax206Display</OutputName>
+    <!-- MSI Package/@Version needs a plain N.N.N(.N) number - the release
+         workflow passes this in with the tag's leading "v" stripped
+         (-p:ProductVersion=1.0.1 for tag v1.0.1). This default is only ever
+         seen on a manual/local build of the installer by itself. -->
+    <ProductVersion Condition="'$(ProductVersion)' == ''">0.0.1</ProductVersion>
+    <!-- Where the self-contained single-file exe to package was published to
+         - matches release.yml's `dotnet publish` step (its "output" flag
+         points at "publish"), which runs from the repo root, one level up
+         from this project. -->
+    <AppPublishDir Condition="'$(AppPublishDir)' == ''">$(MSBuildThisFileDirectory)..\publish</AppPublishDir>
+    <DefineConstants>ProductVersion=$(ProductVersion);AppPublishDir=$(AppPublishDir)</DefineConstants>
+  </PropertyGroup>
+
+</Project>

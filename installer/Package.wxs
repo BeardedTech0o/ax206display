@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!--
+    Packages the self-contained single-file exe (published separately by
+    release.yml) as a proper per-machine MSI: Start Menu shortcut, an entry
+    in Add/Remove Programs, and - via MajorUpgrade below - an in-place
+    upgrade/downgrade-blocked install keyed off UpgradeCode, so installing a
+    newer release automatically removes the old version instead of a user
+    hand-replacing the exe at whatever path they happened to put it.
+
+    perMachine (not perUser) because the app itself already always elevates
+    on launch (app.manifest requires Administrator for USB/Task Scheduler
+    access - see docs/privilege-separation.md), so there's no separate
+    elevation boundary to preserve by installing per-user instead.
+  -->
+  <Package Name="Ax206Display"
+           Manufacturer="BeardedTech0o"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="3509122B-5EAE-4FDA-A922-CB8127B6EE1C"
+           Language="1033"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Ax206Display is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="AppIcon.ico" SourceFile="..\src\Ax206Display.App\Assets\AppIcon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <!-- Windows Installer's own repair flow (reinstalling missing/changed
+         files) doesn't apply to a single self-contained exe - anything wrong
+         with it needs a real reinstall/upgrade, not a per-file repair. -->
+    <Property Id="ARPNOREPAIR" Value="yes" Secure="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Ax206Display">
+        <Component Id="MainExecutable" Guid="*">
+          <File Id="Ax206DisplayExe" Source="$(var.AppPublishDir)\Ax206Display.exe" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <!-- A Shortcut can't itself be a Component's KeyPath, so this follows
+           the standard WiX idiom of using a component-local registry value
+           as the KeyPath instead - it also doubles as the uninstall marker
+           Windows Installer needs to know this component was ever
+           installed. -->
+      <Component Id="ApplicationShortcut" Guid="*">
+        <Shortcut Id="ApplicationStartMenuShortcut"
+                   Name="Ax206 Display"
+                   Target="[INSTALLFOLDER]Ax206Display.exe"
+                   WorkingDirectory="INSTALLFOLDER"
+                   Icon="AppIcon.ico" />
+        <RemoveFolder Id="RemoveProgramMenuFolder" On="uninstall" />
+        <RegistryValue Root="HKLM" Key="Software\BeardedTech0o\Ax206Display" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <Feature Id="Main">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="ApplicationShortcut" />
+    </Feature>
+
+  </Package>
+</Wix>

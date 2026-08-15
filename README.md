@@ -12,10 +12,15 @@ citations, and known gaps.
 
 ## Download
 
-Prebuilt Windows executables are published on the
-[Releases page](https://github.com/BeardedTech0o/ax206display/releases) -
-grab the latest `Ax206Display-*-win-x64.exe`, no separate .NET install
-required.
+Prebuilt Windows builds are published on the
+[Releases page](https://github.com/BeardedTech0o/ax206display/releases) - no
+separate .NET install required either way:
+
+- `Ax206Display-*-win-x64.msi` - the installer (recommended): adds a Start
+  Menu shortcut and an Add/Remove Programs entry, and cleanly replaces the
+  previous version on your next update instead of you hand-swapping exes.
+- `Ax206Display-*-win-x64.exe` - the same app as a single portable exe, for
+  running without installing anything.
 
 ## Status
 
