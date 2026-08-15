@@ -114,9 +114,13 @@ public sealed partial class UniFiPumpService : BackgroundService
             return null;
         }
 
+        // Null for the common case of an account with no 2FA - see
+        // IntegrationConfig.TotpSecretKey.
+        var totpSecret = integration.TotpSecretKey is { } totpSecretKey ? _secretStore.GetSecret(totpSecretKey) : null;
+
         var httpClient = IntegrationHttpClientFactory.Create(integration, enableCookies: true);
         var client = new UniFiClient(httpClient);
-        await client.LoginAsync(integration.Username, password, cancellationToken);
+        await client.LoginAsync(integration.Username, password, totpSecret, cancellationToken);
         return client;
     }
 

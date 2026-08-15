@@ -24,6 +24,20 @@ public sealed record IntegrationConfig
     public string? SecretKey { get; init; }
 
     /// <summary>
+    /// Points to a second secret-store entry holding a base32 TOTP shared
+    /// secret (the same one an authenticator app would be seeded with), for
+    /// integrations whose account has 2FA enabled - currently only UniFi.
+    /// Null means the account has no 2FA, which is the common case and the
+    /// only one this was needed for before UniFi OS started returning
+    /// HTTP 499 (api.err.Ubic2faTokenRequired) for 2FA-enabled logins. A
+    /// background service can't prompt a human for a fresh 30-second code
+    /// every time it needs to (re)authenticate, so this stores the seed
+    /// instead and computes a valid code on demand - see
+    /// Ax206Display.DataSources.Auth.TotpGenerator.
+    /// </summary>
+    public string? TotpSecretKey { get; init; }
+
+    /// <summary>
     /// When set, TLS validation for this integration pins to this exact leaf
     /// certificate (SHA-256 thumbprint, hex, no separators) instead of running
     /// normal chain/hostname validation - i.e. certificate pinning, not a

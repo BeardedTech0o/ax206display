@@ -100,6 +100,10 @@
                     <TextBlock Text="Password (leave blank to keep the saved one)" Margin="0,0,0,2"/>
                     <PasswordBox x:Name="UniFiPasswordBox" Margin="0,0,0,8"/>
 
+                    <TextBlock Text="TOTP secret (only if this account has 2FA enabled - leave blank otherwise, or to keep the saved one)" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                    <TextBlock Text="This is the base32 &quot;manual entry&quot;/&quot;setup&quot; key shown when you enabled 2FA, not a live 6-digit code from your authenticator app - the app needs the secret itself to generate one whenever it needs to reconnect." TextWrapping="Wrap" FontStyle="Italic" Foreground="{StaticResource Text2Brush}" Margin="0,0,0,2"/>
+                    <PasswordBox x:Name="UniFiTotpSecretBox" Margin="0,0,0,8"/>
+
                     <TextBlock Text="Pinned certificate thumbprint (optional - for a self-signed certificate)" Margin="0,0,0,2"/>
                     <DockPanel Margin="0,0,0,8">
                         <Button DockPanel.Dock="Right" Content="Detect" Padding="10,4" Margin="6,0,0,0" Click="OnUniFiDetectCertificateClick"/>

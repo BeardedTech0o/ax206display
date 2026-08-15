@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using Ax206Display.DataSources.Auth;
 
 namespace Ax206Display.DataSources.UniFi;
 
@@ -18,6 +19,14 @@ namespace Ax206Display.DataSources.UniFi;
 /// </remarks>
 public sealed class UniFiClient : IUniFiClient
 {
+    // Not a registered/standard HttpStatusCode - System.Net.HttpStatusCode
+    // has no member for it, which is also why an unhandled failure here
+    // used to surface as the unhelpful "status code 499 (unknown)". UniFi OS
+    // uses it specifically to mean api.err.Ubic2faTokenRequired: the
+    // credentials were fine, but the account has 2FA enabled and the login
+    // needs a token too.
+    private const int TwoFactorRequiredStatusCode = 499;
+
     private readonly HttpClient _httpClient;
     private string? _csrfToken;
 
@@ -26,20 +35,45 @@ public sealed class UniFiClient : IUniFiClient
         _httpClient = httpClient;
     }
 
-    public async Task LoginAsync(string username, string password, CancellationToken cancellationToken = default)
+    /// <param name="totpSecret">
+    /// Base32 TOTP shared secret for a 2FA-enabled account (see
+    /// <see cref="Config.Models.IntegrationConfig.TotpSecretKey"/>). Login is
+    /// tried without a token first; only if UniFi OS comes back asking for
+    /// one (see <see cref="TwoFactorRequiredStatusCode"/>) is a code computed
+    /// from this secret and the login retried with it - so this is a no-op
+    /// extra check, not an extra round trip, for the common no-2FA account.
+    /// Null/empty for an account with no 2FA.
+    /// </param>
+    public async Task LoginAsync(string username, string password, string? totpSecret = null, CancellationToken cancellationToken = default)
+    {
+        var response = await SendLoginRequestAsync(username, password, token: null, cancellationToken);
+
+        if ((int)response.StatusCode == TwoFactorRequiredStatusCode && totpSecret is { Length: > 0 })
+        {
+            response.Dispose();
+            var code = TotpGenerator.GenerateCode(totpSecret);
+            response = await SendLoginRequestAsync(username, password, code, cancellationToken);
+        }
+
+        using (response)
+        {
+            response.EnsureSuccessStatusCode();
+
+            if (response.Headers.TryGetValues("X-CSRF-Token", out var values))
+            {
+                _csrfToken = values.FirstOrDefault();
+            }
+        }
+    }
+
+    private async Task<HttpResponseMessage> SendLoginRequestAsync(string username, string password, string? token, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
         {
-            Content = JsonContent.Create(new LoginRequest(username, password, false)),
+            Content = JsonContent.Create(new LoginRequest(username, password, false, token)),
         };
 
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        if (response.Headers.TryGetValues("X-CSRF-Token", out var values))
-        {
-            _csrfToken = values.FirstOrDefault();
-        }
+        return await _httpClient.SendAsync(request, cancellationToken);
     }
 
     public async Task<UniFiSiteStatus> GetSiteHealthAsync(string site = "default", CancellationToken cancellationToken = default)
@@ -63,7 +97,7 @@ public sealed class UniFiClient : IUniFiClient
         return new UniFiSiteStatus(subsystems);
     }
 
-    private sealed record LoginRequest(string Username, string Password, bool RememberMe);
+    private sealed record LoginRequest(string Username, string Password, bool RememberMe, string? Token = null);
 
     private sealed class HealthResponse
     {

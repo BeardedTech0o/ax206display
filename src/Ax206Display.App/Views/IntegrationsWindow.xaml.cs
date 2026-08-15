@@ -224,8 +224,13 @@ public partial class IntegrationsWindow : Window
                 return;
             }
 
+            // Null when the account has no 2FA - the common case. See
+            // IntegrationConfig.TotpSecretKey and UniFiClient.LoginAsync.
+            var totpSecret = await ResolveSecretByKeyAsync(UniFiTotpSecretBox.Password, existing?.TotpSecretKey);
+
             var integrationId = existing?.Id ?? Guid.NewGuid().ToString("N");
             var secretKey = existing?.SecretKey ?? $"integration.{integrationId}";
+            var totpSecretKey = totpSecret is null ? null : existing?.TotpSecretKey ?? $"integration.{integrationId}.totp";
 
             var testConfig = new IntegrationConfig
             {
@@ -235,15 +240,17 @@ public partial class IntegrationsWindow : Window
                 Username = username,
                 Site = site,
                 SecretKey = secretKey,
+                TotpSecretKey = totpSecretKey,
                 PinnedCertificateSha256Thumbprint = thumbprint,
             };
 
             using var httpClient = IntegrationHttpClientFactory.Create(testConfig, enableCookies: true);
             var client = new UniFiClient(httpClient);
-            await client.LoginAsync(username, password);
+            await client.LoginAsync(username, password, totpSecret);
             var status = await client.GetSiteHealthAsync(site);
 
-            await SaveIntegrationAsync(config, testConfig, secretKey, password);
+            var extraSecret = totpSecretKey is not null && totpSecret is not null ? (totpSecretKey, totpSecret) : ((string, string)?)null;
+            await SaveIntegrationAsync(config, testConfig, secretKey, password, extraSecret);
 
             SetUniFiStatus($"Connected - {status.Subsystems.Count} subsystem(s) reporting. Saved.");
         }
@@ -255,13 +262,23 @@ public partial class IntegrationsWindow : Window
 
     /// <summary>Returns the freshly entered secret, or - if the field was left blank - the previously saved one for this integration.</summary>
     private async Task<string?> ResolveSecretAsync(string enteredValue, IntegrationConfig? existing)
+        => await ResolveSecretByKeyAsync(enteredValue, existing?.SecretKey);
+
+    /// <summary>
+    /// Same "blank keeps the saved value" rule as <see cref="ResolveSecretAsync"/>,
+    /// but for a secret whose store key isn't always <see cref="IntegrationConfig.SecretKey"/>
+    /// - i.e. UniFi's optional TOTP secret. Null <paramref name="existingKey"/>
+    /// (never configured) plus a blank entry correctly resolves to null, not an
+    /// exception - unlike the password, this secret is allowed to not exist.
+    /// </summary>
+    private async Task<string?> ResolveSecretByKeyAsync(string enteredValue, string? existingKey)
     {
         if (!string.IsNullOrEmpty(enteredValue))
         {
             return enteredValue;
         }
 
-        if (existing?.SecretKey is not { } existingKey)
+        if (existingKey is null)
         {
             return null;
         }
@@ -270,10 +287,15 @@ public partial class IntegrationsWindow : Window
         return _secretStore.GetSecret(existingKey);
     }
 
-    private async Task SaveIntegrationAsync(AppConfig config, IntegrationConfig testConfig, string secretKey, string secretValue)
+    private async Task SaveIntegrationAsync(AppConfig config, IntegrationConfig testConfig, string secretKey, string secretValue, (string Key, string Value)? extraSecret = null)
     {
         await _secretStore.LoadAsync();
         _secretStore.SetSecret(secretKey, secretValue);
+        if (extraSecret is { } extra)
+        {
+            _secretStore.SetSecret(extra.Key, extra.Value);
+        }
+
         await _secretStore.SaveAsync();
 
         var updatedIntegrations = config.Integrations.Where(i => i.Kind != testConfig.Kind).ToList();
@@ -297,6 +319,7 @@ public partial class IntegrationsWindow : Window
     {
         await RemoveIntegrationAsync(UniFiKind, SetUniFiStatus);
         UniFiPasswordBox.Password = string.Empty;
+        UniFiTotpSecretBox.Password = string.Empty;
     }
 
     private async Task RemoveIntegrationAsync(string kind, Action<string> setStatus)
@@ -315,6 +338,11 @@ public partial class IntegrationsWindow : Window
             {
                 await _secretStore.LoadAsync();
                 _secretStore.RemoveSecret(secretKey);
+                if (existing.TotpSecretKey is { } totpSecretKey)
+                {
+                    _secretStore.RemoveSecret(totpSecretKey);
+                }
+
                 await _secretStore.SaveAsync();
             }
 

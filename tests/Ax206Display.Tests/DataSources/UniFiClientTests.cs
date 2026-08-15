@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using Ax206Display.DataSources.Auth;
 using Ax206Display.DataSources.UniFi;
 using Ax206Display.Tests.TestSupport;
 
@@ -7,6 +8,62 @@ namespace Ax206Display.Tests.DataSources;
 
 public class UniFiClientTests
 {
+    [Fact]
+    public async Task LoginAsync_RetriesWithComputedTotpCodeWhenServerRequiresTwoFactor()
+    {
+        const string totpSecret = "JBSWY3DPEHPK3PXP";
+        var requestBodies = new List<string>();
+        var callCount = 0;
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            callCount++;
+            // Captured here, not from handler.Requests afterwards - the
+            // request (and its Content) is disposed by UniFiClient's own
+            // `using` as soon as SendAsync returns, before this test method
+            // gets to make any assertions.
+            requestBodies.Add(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+
+            return callCount == 1
+                ? new HttpResponseMessage((HttpStatusCode)499)
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
+        });
+        var client = CreateClient(handler);
+
+        await client.LoginAsync("admin", "password", totpSecret);
+
+        Assert.Equal(2, requestBodies.Count);
+        var expectedCode = TotpGenerator.GenerateCode(totpSecret);
+        Assert.DoesNotContain(expectedCode, requestBodies[0]);
+        Assert.Contains(expectedCode, requestBodies[1]);
+    }
+
+    [Fact]
+    public async Task LoginAsync_DoesNotRetryWhenFirstAttemptSucceedsEvenWithTotpSecretConfigured()
+    {
+        var handler = new FakeHttpMessageHandler(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
+            response.Headers.Add("X-CSRF-Token", "csrf-abc");
+            return response;
+        });
+        var client = CreateClient(handler);
+
+        await client.LoginAsync("admin", "password", "JBSWY3DPEHPK3PXP");
+
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task LoginAsync_ThrowsWithoutRetryingWhenServerRequiresTwoFactorButNoSecretConfigured()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage((HttpStatusCode)499));
+        var client = CreateClient(handler);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.LoginAsync("admin", "password"));
+
+        Assert.Single(handler.Requests);
+    }
+
     [Fact]
     public async Task LoginAsync_CapturesCsrfTokenFromResponseHeader()
     {
