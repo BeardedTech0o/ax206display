@@ -7,6 +7,36 @@ using Ax206Display.Rendering.Widgets;
 namespace Ax206Display.App.Views.Designer;
 
 /// <summary>
+/// Everything <see cref="DesignerWidgetOverlay"/> needs from the owning
+/// window: selection changes, group-drag lifecycle, and snap-target lookup.
+/// Bundled into one object instead of half a dozen constructor parameters.
+/// </summary>
+internal sealed class DesignerOverlayCallbacks
+{
+    /// <summary>Replace the whole selection with just this item (plain click on an unselected item).</summary>
+    public required Action<WidgetDesignItem> OnSelect { get; init; }
+
+    /// <summary>Add/remove this item from the current selection (Ctrl/Shift+click).</summary>
+    public required Action<WidgetDesignItem> OnToggleSelect { get; init; }
+
+    /// <summary>A body drag is starting - capture the current position of every selected item.</summary>
+    public required Action OnDragStart { get; init; }
+
+    /// <summary>The anchor item moved by (dx, dy) from its drag-start position (already snap-adjusted) - apply the same delta to every selected item.</summary>
+    public required Action<int, int> OnDragMove { get; init; }
+
+    public required Action OnDragEnd { get; init; }
+
+    public required Action OnChanged { get; init; }
+
+    /// <summary>The other widgets' boxes to snap against - queried at drag time so it's always current.</summary>
+    public required Func<IReadOnlyList<SnapBox>> GetSnapTargets { get; init; }
+
+    /// <summary>Draws (or, with two nulls, clears) the vertical/horizontal alignment guide lines.</summary>
+    public required Action<int?, int?> ShowSnapGuides { get; init; }
+}
+
+/// <summary>
 /// A transparent, click-to-select / drag-to-move / corner-handle-to-resize
 /// hit region for one widget, laid over the real rendered preview. Purely
 /// interaction chrome - the actual pixels come from the SkiaSharp compositor
@@ -21,10 +51,7 @@ internal sealed class DesignerWidgetOverlay : Grid
     private readonly Canvas _rootCanvas;
     private readonly int _canvasWidth;
     private readonly int _canvasHeight;
-    private readonly Action<WidgetDesignItem> _onSelect;
-    private readonly Action _onChanged;
-    private readonly Func<IReadOnlyList<SnapBox>> _getSnapTargets;
-    private readonly Action<int?, int?> _showSnapGuides;
+    private readonly DesignerOverlayCallbacks _callbacks;
 
     private readonly Border _hitBorder;
     private readonly List<Border> _handles = [];
@@ -39,31 +66,26 @@ internal sealed class DesignerWidgetOverlay : Grid
 
     public bool IsSelected { get; private set; }
 
-    /// <param name="getSnapTargets">The other widgets' boxes to snap against - queried at drag time so it's always current.</param>
-    /// <param name="showSnapGuides">Draws (or, with two nulls, clears) the vertical/horizontal alignment guide lines.</param>
     public DesignerWidgetOverlay(
         WidgetDesignItem item,
         Canvas rootCanvas,
         int canvasWidth,
         int canvasHeight,
-        Action<WidgetDesignItem> onSelect,
-        Action onChanged,
-        Func<IReadOnlyList<SnapBox>> getSnapTargets,
-        Action<int?, int?> showSnapGuides)
+        DesignerOverlayCallbacks callbacks)
     {
         _item = item;
         _rootCanvas = rootCanvas;
         _canvasWidth = canvasWidth;
         _canvasHeight = canvasHeight;
-        _onSelect = onSelect;
-        _onChanged = onChanged;
-        _getSnapTargets = getSnapTargets;
-        _showSnapGuides = showSnapGuides;
+        _callbacks = callbacks;
+
+        var accentBrush = (Brush)Application.Current.FindResource("AccentBrush");
+        var handleBorderBrush = (Brush)Application.Current.FindResource("SurfaceBrush");
 
         _hitBorder = new Border
         {
             Background = Brushes.Transparent,
-            BorderBrush = Brushes.DeepSkyBlue,
+            BorderBrush = accentBrush,
             BorderThickness = new Thickness(0),
         };
         _hitBorder.MouseLeftButtonDown += OnBodyMouseDown;
@@ -71,13 +93,13 @@ internal sealed class DesignerWidgetOverlay : Grid
         _hitBorder.MouseLeftButtonUp += OnBodyMouseUp;
         Children.Add(_hitBorder);
 
-        AddHandle("nw", HorizontalAlignment.Left, VerticalAlignment.Top, new Thickness(-HandleSize / 2, -HandleSize / 2, 0, 0), Cursors.SizeNWSE);
-        AddHandle("ne", HorizontalAlignment.Right, VerticalAlignment.Top, new Thickness(0, -HandleSize / 2, -HandleSize / 2, 0), Cursors.SizeNESW);
-        AddHandle("sw", HorizontalAlignment.Left, VerticalAlignment.Bottom, new Thickness(-HandleSize / 2, 0, 0, -HandleSize / 2), Cursors.SizeNESW);
-        AddHandle("se", HorizontalAlignment.Right, VerticalAlignment.Bottom, new Thickness(0, 0, -HandleSize / 2, -HandleSize / 2), Cursors.SizeNWSE);
+        AddHandle("nw", HorizontalAlignment.Left, VerticalAlignment.Top, new Thickness(-HandleSize / 2, -HandleSize / 2, 0, 0), Cursors.SizeNWSE, accentBrush, handleBorderBrush);
+        AddHandle("ne", HorizontalAlignment.Right, VerticalAlignment.Top, new Thickness(0, -HandleSize / 2, -HandleSize / 2, 0), Cursors.SizeNESW, accentBrush, handleBorderBrush);
+        AddHandle("sw", HorizontalAlignment.Left, VerticalAlignment.Bottom, new Thickness(-HandleSize / 2, 0, 0, -HandleSize / 2), Cursors.SizeNESW, accentBrush, handleBorderBrush);
+        AddHandle("se", HorizontalAlignment.Right, VerticalAlignment.Bottom, new Thickness(0, 0, -HandleSize / 2, -HandleSize / 2), Cursors.SizeNWSE, accentBrush, handleBorderBrush);
 
         SyncPosition();
-        SetSelected(false);
+        SetSelected(false, showHandles: false);
     }
 
     public void SyncPosition()
@@ -89,24 +111,25 @@ internal sealed class DesignerWidgetOverlay : Grid
         Panel.SetZIndex(this, _item.ZOrder);
     }
 
-    public void SetSelected(bool selected)
+    /// <param name="showHandles">Resize handles only make sense for a single selected widget - a multi-selection shows the selection outline only.</param>
+    public void SetSelected(bool selected, bool showHandles)
     {
         IsSelected = selected;
         _hitBorder.BorderThickness = new Thickness(selected ? 2 : 0);
         foreach (var handle in _handles)
         {
-            handle.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
+            handle.Visibility = selected && showHandles ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 
-    private void AddHandle(string name, HorizontalAlignment horizontal, VerticalAlignment vertical, Thickness margin, Cursor cursor)
+    private void AddHandle(string name, HorizontalAlignment horizontal, VerticalAlignment vertical, Thickness margin, Cursor cursor, Brush fill, Brush borderBrush)
     {
         var handle = new Border
         {
             Width = HandleSize,
             Height = HandleSize,
-            Background = Brushes.DeepSkyBlue,
-            BorderBrush = Brushes.White,
+            Background = fill,
+            BorderBrush = borderBrush,
             BorderThickness = new Thickness(1),
             HorizontalAlignment = horizontal,
             VerticalAlignment = vertical,
@@ -125,7 +148,27 @@ internal sealed class DesignerWidgetOverlay : Grid
 
     private void OnBodyMouseDown(object sender, MouseButtonEventArgs e)
     {
-        _onSelect(_item);
+        var modifierHeld = Keyboard.Modifiers.HasFlag(ModifierKeys.Control) || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+
+        if (modifierHeld)
+        {
+            _callbacks.OnToggleSelect(_item);
+            if (!IsSelected)
+            {
+                // The click just deselected this widget - nothing to drag.
+                e.Handled = true;
+                return;
+            }
+        }
+        else if (!IsSelected)
+        {
+            // Clicking an item outside the current selection replaces it.
+            // Clicking one that's already part of a multi-selection keeps
+            // the whole group selected so the drag below moves it together.
+            _callbacks.OnSelect(_item);
+        }
+
+        _callbacks.OnDragStart();
         _isDraggingBody = true;
         _dragStart = e.GetPosition(_rootCanvas);
         _dragOriginX = _item.X;
@@ -146,25 +189,18 @@ internal sealed class DesignerWidgetOverlay : Grid
         var dy = (int)Math.Round(pos.Y - _dragStart.Y);
 
         var proposed = new SnapBox(_dragOriginX + dx, _dragOriginY + dy, _item.Width, _item.Height);
-        var snapped = DesignerSnapEngine.SnapMove(proposed, _getSnapTargets(), _canvasWidth, _canvasHeight);
-        _showSnapGuides(snapped.VerticalGuide, snapped.HorizontalGuide);
+        var snapped = DesignerSnapEngine.SnapMove(proposed, _callbacks.GetSnapTargets(), _canvasWidth, _canvasHeight);
+        _callbacks.ShowSnapGuides(snapped.VerticalGuide, snapped.HorizontalGuide);
 
-        // Clamp after snapping so a snap can never push the widget off-canvas.
-        var newX = Math.Clamp(snapped.X, 0, Math.Max(0, _canvasWidth - _item.Width));
-        var newY = Math.Clamp(snapped.Y, 0, Math.Max(0, _canvasHeight - _item.Height));
-
-        _item.X = newX;
-        _item.Y = newY;
-        Canvas.SetLeft(this, newX);
-        Canvas.SetTop(this, newY);
-        _onChanged();
+        _callbacks.OnDragMove(snapped.X - _dragOriginX, snapped.Y - _dragOriginY);
     }
 
     private void OnBodyMouseUp(object sender, MouseButtonEventArgs e)
     {
         _isDraggingBody = false;
         _hitBorder.ReleaseMouseCapture();
-        _showSnapGuides(null, null);
+        _callbacks.ShowSnapGuides(null, null);
+        _callbacks.OnDragEnd();
     }
 
     private void OnHandleMouseDown(object sender, MouseButtonEventArgs e)
@@ -216,7 +252,7 @@ internal sealed class DesignerWidgetOverlay : Grid
         Canvas.SetTop(this, newY);
         Width = newWidth;
         Height = newHeight;
-        _onChanged();
+        _callbacks.OnChanged();
     }
 
     private void OnHandleMouseUp(object sender, MouseButtonEventArgs e)

@@ -42,6 +42,22 @@ public sealed class WidgetDesignItem
         };
     }
 
+    /// <summary>Deep copy for the designer's Duplicate action - caller assigns a fresh <paramref name="newId"/> and picks X/Y/ZOrder.</summary>
+    public WidgetDesignItem Clone(string newId)
+    {
+        return new WidgetDesignItem
+        {
+            Id = newId,
+            Type = Type,
+            X = X,
+            Y = Y,
+            Width = Width,
+            Height = Height,
+            ZOrder = ZOrder,
+            Settings = (JsonObject)Settings.DeepClone(),
+        };
+    }
+
     public WidgetConfig ToConfig()
     {
         return new WidgetConfig

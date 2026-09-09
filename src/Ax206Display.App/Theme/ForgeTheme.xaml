@@ -2,11 +2,18 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!--
-        Palette and shapes lifted from BeardedTech0o/forge's dark theme
-        (tailwind.config.js + app.css: the surface/surface2/surface3, borderc,
-        textc/text2, and fluorescent-lime accent CSS custom properties).
-        This app doesn't have a light/dark toggle, so it's pinned to forge's
-        dark palette permanently rather than porting the light tokens too.
+        nullxx design system v1 (light, neumorphic, teal accent) - ported
+        from tokens.json/tokens.css. Key names are kept the same as the
+        previous "forge" dark theme so every window that already references
+        them (WidgetDesignerWindow, IntegrationsWindow) re-skins for free.
+
+        WPF's Effect property only accepts one effect per element, so the
+        dual light+dark drop shadow the CSS tokens describe
+        ("2px 2px 5px dark, -2px -2px 5px light") can't be reproduced with a
+        single Border - see the two-layer Border pairs in
+        WidgetDesignerWindow.xaml for the real neumorphic raised look.
+        Everywhere else (buttons, inputs) gets a single soft dark shadow,
+        which reads close enough to "barely there" emboss the README locks.
 
         Native OS chrome this can't reach: MessageBox.Show (Win32 dialog,
         not a WPF Window) and Microsoft.Win32.OpenFileDialog (the background
@@ -14,14 +21,16 @@
         supported way to skin either one.
     -->
 
-    <Color x:Key="SurfaceColor">#0C0C09</Color>
-    <Color x:Key="Surface2Color">#1A1A14</Color>
-    <Color x:Key="Surface3Color">#242419</Color>
-    <Color x:Key="BorderColor">#2F2F22</Color>
-    <Color x:Key="TextColor">#F5F5EF</Color>
-    <Color x:Key="Text2Color">#92928A</Color>
-    <Color x:Key="AccentColor">#D7FF3E</Color>
-    <Color x:Key="AccentDarkColor">#B7D935</Color>
+    <Color x:Key="SurfaceColor">#E6E9EE</Color>
+    <Color x:Key="Surface2Color">#E6E9EE</Color>
+    <Color x:Key="Surface3Color">#DDE1E7</Color>
+    <Color x:Key="BorderColor">#D3D7DD</Color>
+    <Color x:Key="TextColor">#3A3F4A</Color>
+    <Color x:Key="Text2Color">#767C88</Color>
+    <Color x:Key="AccentColor">#2F8A8A</Color>
+    <Color x:Key="AccentDarkColor">#6FC4C4</Color>
+    <Color x:Key="ShadowDarkColor">#CCD0D6</Color>
+    <Color x:Key="ShadowLightColor">#FFFFFF</Color>
 
     <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
     <SolidColorBrush x:Key="Surface2Brush" Color="{StaticResource Surface2Color}"/>
@@ -31,14 +40,28 @@
     <SolidColorBrush x:Key="Text2Brush" Color="{StaticResource Text2Color}"/>
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
     <SolidColorBrush x:Key="AccentDarkBrush" Color="{StaticResource AccentDarkColor}"/>
-    <!-- Text/icons painted on an accent-colored surface - matches forge's text-gray-950 on .btn-primary. -->
-    <SolidColorBrush x:Key="OnAccentBrush" Color="#0C0C09"/>
+    <SolidColorBrush x:Key="ShadowDarkBrush" Color="{StaticResource ShadowDarkColor}"/>
+    <SolidColorBrush x:Key="ShadowLightBrush" Color="{StaticResource ShadowLightColor}"/>
+    <!-- Text/icons painted on an accent-colored surface. -->
+    <SolidColorBrush x:Key="OnAccentBrush" Color="#F5F5EF"/>
 
-    <!-- Falls back through the chain if Poppins isn't installed - same stack app.css declares after it. -->
-    <FontFamily x:Key="AppFontFamily">Poppins, Segoe UI, Arial</FontFamily>
+    <!-- Falls back through the chain if Google Sans Flex isn't installed. -->
+    <FontFamily x:Key="AppFontFamily">Google Sans Flex, Segoe UI, Arial</FontFamily>
 
-    <CornerRadius x:Key="ControlCornerRadius">10</CornerRadius>
-    <CornerRadius x:Key="CardCornerRadius">16</CornerRadius>
+    <CornerRadius x:Key="ControlCornerRadius">13</CornerRadius>
+    <CornerRadius x:Key="CardCornerRadius">22</CornerRadius>
+    <CornerRadius x:Key="BadgeCornerRadius">20</CornerRadius>
+    <CornerRadius x:Key="ProgressCornerRadius">6</CornerRadius>
+
+    <!-- Single-shadow approximation of --shadow-control-raised, used by buttons/inputs. -->
+    <DropShadowEffect x:Key="ControlShadowEffect"
+                       Color="{StaticResource ShadowDarkColor}"
+                       Direction="315" ShadowDepth="1.5" BlurRadius="4" Opacity="0.7"/>
+
+    <!-- Single-shadow approximation of --shadow-card-raised, used where a two-layer card border isn't set up. -->
+    <DropShadowEffect x:Key="CardShadowEffect"
+                       Color="{StaticResource ShadowDarkColor}"
+                       Direction="315" ShadowDepth="2" BlurRadius="6" Opacity="0.7"/>
 
     <!-- ============================== Window ============================== -->
 
@@ -75,6 +98,7 @@
                             Background="{TemplateBinding Background}"
                             CornerRadius="{StaticResource ControlCornerRadius}"
                             Padding="{TemplateBinding Padding}"
+                            Effect="{StaticResource ControlShadowEffect}"
                             TextElement.Foreground="{TemplateBinding Foreground}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>

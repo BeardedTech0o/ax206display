@@ -40,7 +40,8 @@ public partial class WidgetDesignerWindow : Window
 
     private AppConfig _config = new();
     private DeviceProfileConfig? _selectedDevice;
-    private WidgetDesignItem? _selectedItem;
+    private HashSet<WidgetDesignItem> _selectedItems = [];
+    private readonly Dictionary<WidgetDesignItem, (int X, int Y)> _dragOriginPositions = [];
     private FrameCompositor? _compositor;
     private TextBlock? _positionText;
     private bool _isLoadingDevice;
@@ -49,11 +50,14 @@ public partial class WidgetDesignerWindow : Window
     private bool _showGrid;
     private System.Windows.Shapes.Line? _verticalGuideLine;
     private System.Windows.Shapes.Line? _horizontalGuideLine;
+    private Point? _marqueeStart;
+    private HashSet<WidgetDesignItem> _marqueeBaseSelection = [];
+    private System.Windows.Shapes.Rectangle? _marqueeRect;
 
     public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider, ProxmoxGuestDirectory proxmoxGuestDirectory, ProxmoxNodeDirectory proxmoxNodeDirectory, DisplayManagerHostedService displayManager)
     {
         InitializeComponent();
-        Theme.DarkTitleBar.Apply(this);
+        Theme.TitleBarTheme.Apply(this);
         _configService = configService;
         _dataProvider = dataProvider;
         _proxmoxGuestDirectory = proxmoxGuestDirectory;
@@ -199,7 +203,7 @@ public partial class WidgetDesignerWindow : Window
             Foreground = Foreground,
             FontFamily = FontFamily,
         };
-        Theme.DarkTitleBar.Apply(dialog);
+        Theme.TitleBarTheme.Apply(dialog);
 
         okButton.Click += (_, _) => dialog.DialogResult = true;
         textBox.Loaded += (_, _) => textBox.Focus();
@@ -278,7 +282,7 @@ public partial class WidgetDesignerWindow : Window
         _isLoadingDevice = true;
 
         _selectedDevice = device;
-        _selectedItem = null;
+        _selectedItems = [];
         SaveButton.IsEnabled = false;
         RenameDeviceButton.IsEnabled = true;
         RemoveDeviceButton.IsEnabled = true;
@@ -295,6 +299,8 @@ public partial class WidgetDesignerWindow : Window
 
         RebuildOverlays();
         ShowEmptyPropertyPanel();
+        DeleteButton.IsEnabled = false;
+        DuplicateButton.IsEnabled = false;
         SetStatus($"{device.ScreenWidth}x{device.ScreenHeight}");
         PreviewElement.InvalidateVisual();
 
@@ -318,25 +324,54 @@ public partial class WidgetDesignerWindow : Window
 
     private void AddOverlayFor(WidgetDesignItem item)
     {
-        var overlay = new DesignerWidgetOverlay(
-            item,
-            OverlayCanvas,
-            (int)DesignerRoot.Width,
-            (int)DesignerRoot.Height,
-            SelectItem,
-            OnItemChanged,
-            () => GetSnapTargetsExcept(item),
-            ShowSnapGuides);
+        var callbacks = new DesignerOverlayCallbacks
+        {
+            OnSelect = SelectItem,
+            OnToggleSelect = ToggleSelectItem,
+            OnDragStart = BeginGroupDrag,
+            OnDragMove = ContinueGroupDrag,
+            OnDragEnd = () => _dragOriginPositions.Clear(),
+            OnChanged = OnItemChanged,
+            GetSnapTargets = () => GetSnapTargetsExcept(_selectedItems),
+            ShowSnapGuides = ShowSnapGuides,
+        };
+        var overlay = new DesignerWidgetOverlay(item, OverlayCanvas, (int)DesignerRoot.Width, (int)DesignerRoot.Height, callbacks);
         _overlays[item] = overlay;
         OverlayCanvas.Children.Add(overlay);
     }
 
-    private List<SnapBox> GetSnapTargetsExcept(WidgetDesignItem draggedItem)
+    private List<SnapBox> GetSnapTargetsExcept(IReadOnlySet<WidgetDesignItem> excluded)
     {
         return _items
-            .Where(i => !ReferenceEquals(i, draggedItem))
+            .Where(i => !excluded.Contains(i))
             .Select(i => new SnapBox(i.X, i.Y, i.Width, i.Height))
             .ToList();
+    }
+
+    /// <summary>Captures every selected item's current position so a group drag can apply the same delta to each of them.</summary>
+    private void BeginGroupDrag()
+    {
+        _dragOriginPositions.Clear();
+        foreach (var item in _selectedItems)
+        {
+            _dragOriginPositions[item] = (item.X, item.Y);
+        }
+    }
+
+    /// <summary>Applies (dx, dy) - already snapped against the anchor widget - to every selected item's own drag-start position, clamped individually to the canvas.</summary>
+    private void ContinueGroupDrag(int dx, int dy)
+    {
+        var canvasWidth = (int)DesignerRoot.Width;
+        var canvasHeight = (int)DesignerRoot.Height;
+
+        foreach (var (item, origin) in _dragOriginPositions)
+        {
+            item.X = Math.Clamp(origin.X + dx, 0, Math.Max(0, canvasWidth - item.Width));
+            item.Y = Math.Clamp(origin.Y + dy, 0, Math.Max(0, canvasHeight - item.Height));
+            _overlays[item].SyncPosition();
+        }
+
+        OnItemChanged();
     }
 
     /// <summary>
@@ -388,17 +423,52 @@ public partial class WidgetDesignerWindow : Window
         return line;
     }
 
-    private void SelectItem(WidgetDesignItem item)
+    private void SelectItem(WidgetDesignItem item) => SetSelection([item]);
+
+    private void ToggleSelectItem(WidgetDesignItem item)
     {
-        if (_selectedItem is not null && _overlays.TryGetValue(_selectedItem, out var previousOverlay))
+        var updated = new HashSet<WidgetDesignItem>(_selectedItems);
+        if (!updated.Remove(item))
         {
-            previousOverlay.SetSelected(false);
+            updated.Add(item);
         }
 
-        _selectedItem = item;
-        _overlays[item].SetSelected(true);
-        DeleteButton.IsEnabled = true;
-        BuildPropertyPanel(item);
+        SetSelection(updated);
+    }
+
+    private void ClearSelection() => SetSelection([]);
+
+    /// <summary>
+    /// Replaces the whole selection, updates every overlay's visual state
+    /// (resize handles only show up for a single selected widget - dragging
+    /// a group only ever moves it, there's no group-resize), and rebuilds
+    /// the property panel for the new selection.
+    /// </summary>
+    private void SetSelection(IEnumerable<WidgetDesignItem> items)
+    {
+        var newSelection = new HashSet<WidgetDesignItem>(items);
+
+        foreach (var (item, overlay) in _overlays)
+        {
+            overlay.SetSelected(newSelection.Contains(item), showHandles: newSelection.Count == 1);
+        }
+
+        _selectedItems = newSelection;
+        DeleteButton.IsEnabled = newSelection.Count > 0;
+        DuplicateButton.IsEnabled = newSelection.Count > 0;
+
+        if (newSelection.Count == 1)
+        {
+            BuildPropertyPanel(newSelection.First());
+        }
+        else if (newSelection.Count > 1)
+        {
+            BuildMultiSelectPropertyPanel(newSelection.Count);
+        }
+        else
+        {
+            ShowEmptyPropertyPanel();
+        }
 
         // Without this, keyboard focus stays wherever it last was - often a
         // ComboBox/TextBox left over from editing a previous widget's
@@ -420,10 +490,83 @@ public partial class WidgetDesignerWindow : Window
         SaveButton.IsEnabled = true;
         PreviewElement.InvalidateVisual();
 
-        if (_selectedItem is not null)
+        if (_selectedItems.Count == 1)
         {
-            RefreshPositionText(_selectedItem);
+            RefreshPositionText(_selectedItems.First());
         }
+    }
+
+    /// <summary>
+    /// Rubber-band select: mouse-down on empty canvas (not on a widget -
+    /// DesignerWidgetOverlay marks its own clicks Handled so they never
+    /// reach here) starts a marquee; anything not held down with Ctrl/Shift
+    /// first clears the existing selection.
+    /// </summary>
+    private void OnCanvasMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var additive = Keyboard.Modifiers.HasFlag(ModifierKeys.Control) || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+        _marqueeBaseSelection = additive ? new HashSet<WidgetDesignItem>(_selectedItems) : [];
+        if (!additive)
+        {
+            ClearSelection();
+        }
+
+        _marqueeStart = e.GetPosition(OverlayCanvas);
+        _marqueeRect = new System.Windows.Shapes.Rectangle
+        {
+            Stroke = (Brush)FindResource("AccentBrush"),
+            StrokeThickness = 1,
+            Fill = new SolidColorBrush(((SolidColorBrush)FindResource("AccentBrush")).Color) { Opacity = 0.15 },
+            IsHitTestVisible = false,
+        };
+        Canvas.SetLeft(_marqueeRect, _marqueeStart.Value.X);
+        Canvas.SetTop(_marqueeRect, _marqueeStart.Value.Y);
+        OverlayCanvas.Children.Add(_marqueeRect);
+        OverlayCanvas.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void OnCanvasMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_marqueeStart is not { } start || _marqueeRect is null)
+        {
+            return;
+        }
+
+        var pos = e.GetPosition(OverlayCanvas);
+        var x = Math.Min(pos.X, start.X);
+        var y = Math.Min(pos.Y, start.Y);
+        var width = Math.Abs(pos.X - start.X);
+        var height = Math.Abs(pos.Y - start.Y);
+
+        Canvas.SetLeft(_marqueeRect, x);
+        Canvas.SetTop(_marqueeRect, y);
+        _marqueeRect.Width = width;
+        _marqueeRect.Height = height;
+
+        var marqueeBounds = new Rect(x, y, width, height);
+        var newSelection = new HashSet<WidgetDesignItem>(_marqueeBaseSelection);
+        foreach (var item in _items)
+        {
+            if (marqueeBounds.IntersectsWith(new Rect(item.X, item.Y, item.Width, item.Height)))
+            {
+                newSelection.Add(item);
+            }
+        }
+
+        SetSelection(newSelection);
+    }
+
+    private void OnCanvasMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_marqueeRect is not null)
+        {
+            OverlayCanvas.Children.Remove(_marqueeRect);
+            _marqueeRect = null;
+        }
+
+        _marqueeStart = null;
+        OverlayCanvas.ReleaseMouseCapture();
     }
 
     /// <summary>
@@ -437,7 +580,7 @@ public partial class WidgetDesignerWindow : Window
     /// </summary>
     private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (_selectedItem is null || !_overlays.TryGetValue(_selectedItem, out var overlay))
+        if (_selectedItems.Count == 0)
         {
             return;
         }
@@ -473,12 +616,14 @@ public partial class WidgetDesignerWindow : Window
 
         var canvasWidth = (int)DesignerRoot.Width;
         var canvasHeight = (int)DesignerRoot.Height;
-        var newX = Math.Clamp(_selectedItem.X + (dx * step), 0, Math.Max(0, canvasWidth - _selectedItem.Width));
-        var newY = Math.Clamp(_selectedItem.Y + (dy * step), 0, Math.Max(0, canvasHeight - _selectedItem.Height));
 
-        _selectedItem.X = newX;
-        _selectedItem.Y = newY;
-        overlay.SyncPosition();
+        foreach (var item in _selectedItems)
+        {
+            item.X = Math.Clamp(item.X + (dx * step), 0, Math.Max(0, canvasWidth - item.Width));
+            item.Y = Math.Clamp(item.Y + (dy * step), 0, Math.Max(0, canvasHeight - item.Height));
+            _overlays[item].SyncPosition();
+        }
+
         OnItemChanged();
         e.Handled = true;
     }
@@ -510,18 +655,59 @@ public partial class WidgetDesignerWindow : Window
 
     private void OnDeleteClick(object sender, RoutedEventArgs e)
     {
-        if (_selectedItem is null)
+        if (_selectedItems.Count == 0)
         {
             return;
         }
 
-        OverlayCanvas.Children.Remove(_overlays[_selectedItem]);
-        _overlays.Remove(_selectedItem);
-        _items.Remove(_selectedItem);
-        _selectedItem = null;
+        foreach (var item in _selectedItems)
+        {
+            OverlayCanvas.Children.Remove(_overlays[item]);
+            _overlays.Remove(item);
+            _items.Remove(item);
+        }
 
+        _selectedItems = [];
         SaveButton.IsEnabled = true;
         ShowEmptyPropertyPanel();
+        DeleteButton.IsEnabled = false;
+        DuplicateButton.IsEnabled = false;
+        PreviewElement.InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Clones every selected widget (deep-copying its settings, per
+    /// <see cref="WidgetDesignItem.Clone"/>) a few pixels down-right of the
+    /// original and selects the new copies, so a drag right afterwards moves
+    /// them into place without disturbing the originals.
+    /// </summary>
+    private void OnDuplicateClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedItems.Count == 0)
+        {
+            return;
+        }
+
+        const int offset = 16;
+        var canvasWidth = (int)DesignerRoot.Width;
+        var canvasHeight = (int)DesignerRoot.Height;
+        var nextZOrder = _items.Count == 0 ? 0 : _items.Max(i => i.ZOrder) + 1;
+        var clones = new List<WidgetDesignItem>();
+
+        foreach (var item in _selectedItems)
+        {
+            var clone = item.Clone(item.Type + "-" + Guid.NewGuid().ToString("N")[..8]);
+            clone.ZOrder = nextZOrder++;
+            clone.X = Math.Clamp(item.X + offset, 0, Math.Max(0, canvasWidth - item.Width));
+            clone.Y = Math.Clamp(item.Y + offset, 0, Math.Max(0, canvasHeight - item.Height));
+
+            _items.Add(clone);
+            AddOverlayFor(clone);
+            clones.Add(clone);
+        }
+
+        SaveButton.IsEnabled = true;
+        SetSelection(clones);
         PreviewElement.InvalidateVisual();
     }
 
@@ -649,12 +835,30 @@ public partial class WidgetDesignerWindow : Window
         PropertyPanel.Children.Clear();
         PropertyPanel.Children.Add(new TextBlock
         {
-            Text = "Select a widget to edit its properties, or add a new one above.",
+            Text = "Select a widget to edit its properties, or add a new one above. Drag a rectangle over several widgets - or Ctrl/Shift-click them - to select more than one.",
             TextWrapping = TextWrapping.Wrap,
-            Foreground = Brushes.Gray,
+            Foreground = (Brush)FindResource("Text2Brush"),
         });
         _positionText = null;
-        DeleteButton.IsEnabled = false;
+    }
+
+    private void BuildMultiSelectPropertyPanel(int count)
+    {
+        PropertyPanel.Children.Clear();
+        PropertyPanel.Children.Add(new TextBlock
+        {
+            Text = $"{count} widgets selected",
+            FontWeight = FontWeights.Bold,
+            FontSize = 14,
+            Margin = new Thickness(0, 0, 0, 4),
+        });
+        PropertyPanel.Children.Add(new TextBlock
+        {
+            Text = "Drag any of them to move the whole group together, or use Duplicate / Delete Selected above. Individual properties and resizing need a single selection.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)FindResource("Text2Brush"),
+        });
+        _positionText = null;
     }
 
     private void BuildPropertyPanel(WidgetDesignItem item)
@@ -670,7 +874,7 @@ public partial class WidgetDesignerWindow : Window
             Margin = new Thickness(0, 0, 0, 4),
         });
 
-        _positionText = new TextBlock { Foreground = Brushes.Gray, Margin = new Thickness(0, 0, 0, 12), TextWrapping = TextWrapping.Wrap };
+        _positionText = new TextBlock { Foreground = (Brush)FindResource("Text2Brush"), Margin = new Thickness(0, 0, 0, 12), TextWrapping = TextWrapping.Wrap };
         PropertyPanel.Children.Add(_positionText);
         RefreshPositionText(item);
 

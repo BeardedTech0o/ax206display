@@ -5,14 +5,14 @@ using System.Windows.Interop;
 namespace Ax206Display.App.Theme;
 
 /// <summary>
-/// Switches a window's native title bar to dark mode via DWM. The title bar
-/// is drawn by the OS, not WPF - ForgeTheme.xaml's resources have no way to
-/// reach it, this is the only supported route. Requires Windows 10 20H1
-/// (build 19041) or later; this app's TargetFramework is already pinned to
-/// net8.0-windows10.0.19041 (SkiaSharp.Views.WPF's constraint - see
+/// Matches a window's native title bar to the app's light theme via DWM. The
+/// title bar is drawn by the OS, not WPF - ForgeTheme.xaml's resources have
+/// no way to reach it, this is the only supported route. Requires Windows 10
+/// 20H1 (build 19041) or later; this app's TargetFramework is already pinned
+/// to net8.0-windows10.0.19041 (SkiaSharp.Views.WPF's constraint - see
 /// Ax206Display.App.csproj), so every machine this runs on supports it.
 /// </summary>
-internal static class DarkTitleBar
+internal static class TitleBarTheme
 {
     private const int DwmwaUseImmersiveDarkMode = 20;
 
@@ -25,10 +25,11 @@ internal static class DarkTitleBar
         window.SourceInitialized += (_, _) =>
         {
             var hwnd = new WindowInteropHelper(window).Handle;
-            var useDarkMode = 1;
+            var useDarkMode = 0;
             // Best-effort: an older Windows build just returns a failure
             // HRESULT here rather than throwing, and there's nothing more
-            // useful to do with it than let the title bar stay light.
+            // useful to do with it than let the title bar stay whatever the
+            // OS default is.
             _ = DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref useDarkMode, sizeof(int));
         };
     }

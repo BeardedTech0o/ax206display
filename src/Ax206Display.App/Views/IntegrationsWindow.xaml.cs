@@ -32,7 +32,7 @@ public partial class IntegrationsWindow : Window
     public IntegrationsWindow(ConfigService configService, SecretStore secretStore)
     {
         InitializeComponent();
-        Theme.DarkTitleBar.Apply(this);
+        Theme.TitleBarTheme.Apply(this);
         _configService = configService;
         _secretStore = secretStore;
 
