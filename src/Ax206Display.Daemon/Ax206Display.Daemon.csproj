@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>ax206display-daemon</AssemblyName>
+    <RootNamespace>Ax206Display.Daemon</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UserSecretsId>ax206display-daemon</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" VersionOverride="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" VersionOverride="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" VersionOverride="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ax206Display.Config\Ax206Display.Config.csproj" />
+    <ProjectReference Include="..\Ax206Display.DataSources\Ax206Display.DataSources.csproj" />
+    <ProjectReference Include="..\Ax206Display.Protocol\Ax206Display.Protocol.csproj" />
+    <ProjectReference Include="..\Ax206Display.Rendering\Ax206Display.Rendering.csproj" />
+    <ProjectReference Include="..\Ax206Display.Transport\Ax206Display.Transport.csproj" />
+  </ItemGroup>
+
+</Project>
