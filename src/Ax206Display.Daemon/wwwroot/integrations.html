@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ax206Display - Integrations</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #14161a;
+    --panel: #1c1f26;
+    --border: #2c313c;
+    --text: #e6e8eb;
+    --muted: #8b93a1;
+    --accent: #5b9dfd;
+    --accent-text: #0b1220;
+    --danger: #f28b82;
+    --success: #81c995;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 1.1rem; margin: 0; font-weight: 600; }
+  header a { color: var(--muted); font-size: 0.85rem; text-decoration: none; }
+  header a:hover { color: var(--text); }
+  main { padding: 1.5rem; max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+  }
+  .card-header h2 { margin: 0; font-size: 1rem; }
+  .card-header .sub { color: var(--muted); font-size: 0.8rem; margin-top: 0.15rem; }
+  .badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    border-radius: 99px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .badge.configured { background: rgba(129,201,149,0.18); color: var(--success); }
+  .badge.not-configured { background: rgba(139,147,161,0.18); color: var(--muted); }
+  .card-body { padding: 0 1.25rem 1.25rem; display: none; border-top: 1px solid var(--border); padding-top: 1rem; }
+  .card.open .card-body { display: block; }
+  .card.open .chevron { transform: rotate(90deg); }
+  .chevron { transition: transform 0.15s; color: var(--muted); }
+  .field { margin-bottom: 0.7rem; }
+  .field label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+  .field input[type="text"], .field input[type="password"], .field input[type="number"] {
+    width: 100%;
+    background: #0f1116;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.88rem;
+  }
+  .field .hint { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; }
+  .field-row { display: grid; grid-template-columns: 2fr 1fr; gap: 0.6rem; }
+  .field-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .checkbox-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.7rem; }
+  .actions { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; align-items: center; }
+  button {
+    background: var(--accent);
+    color: var(--accent-text);
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  button.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  button:disabled { opacity: 0.55; cursor: default; }
+  .status { font-size: 0.82rem; margin-top: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 6px; display: none; }
+  .status.show { display: block; }
+  .status.success { background: rgba(129,201,149,0.12); color: var(--success); }
+  .status.error { background: rgba(242,139,130,0.12); color: var(--danger); }
+  .status.pending { background: rgba(91,157,253,0.12); color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Integrations</h1>
+  <a href="/">&larr; Back to devices</a>
+</header>
+<main id="main">
+  <p style="color:var(--muted); font-size:0.85rem;">
+    Each integration is tested with a real login before it's saved, and a saved password/token is
+    never sent back to this page - leave its field blank to keep what's already saved.
+  </p>
+</main>
+<script>
+  const STATE = { proxmox: null, pihole: null, unifi: null };
+
+  function card(kind, title, bodyHtml) {
+    return `
+      <div class="card" id="card-${kind}">
+        <div class="card-header" onclick="toggleCard('${kind}')">
+          <div>
+            <h2>${title}</h2>
+            <div class="sub" id="sub-${kind}"></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:0.6rem;">
+            <span class="badge not-configured" id="badge-${kind}">Not configured</span>
+            <span class="chevron">&#9656;</span>
+          </div>
+        </div>
+        <div class="card-body">
+          ${bodyHtml}
+          <div class="actions">
+            <button onclick="event.stopPropagation(); testAndSave${cap(kind)}()" id="save-${kind}">Test &amp; Save</button>
+            <button class="danger" onclick="event.stopPropagation(); removeIntegration('${kind}')" id="remove-${kind}" style="display:none;">Remove</button>
+          </div>
+          <div class="status" id="status-${kind}"></div>
+        </div>
+      </div>`;
+  }
+
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  function toggleCard(kind) {
+    document.getElementById(`card-${kind}`).classList.toggle('open');
+  }
+
+  function setStatus(kind, text, cls) {
+    const el = document.getElementById(`status-${kind}`);
+    el.textContent = text;
+    el.className = `status show ${cls || ''}`;
+  }
+
+  function setBusy(kind, busy) {
+    document.getElementById(`save-${kind}`).disabled = busy;
+  }
+
+  async function detectCertificate(kind, urlFieldId, thumbprintFieldId) {
+    const baseUrl = document.getElementById(urlFieldId).value.trim();
+    if (!baseUrl) { setStatus(kind, 'Enter a host URL first.', 'error'); return; }
+    setStatus(kind, 'Detecting certificate...', 'pending');
+    try {
+      const res = await fetch('/api/integrations/detect-certificate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseUrl }),
+      });
+      const body = await res.json();
+      if (!res.ok) { setStatus(kind, body.detail || 'Could not detect a certificate.', 'error'); return; }
+      const trust = confirm(`Certificate thumbprint (SHA-256):\n${body.thumbprint}\n\nTrust this certificate for this connection?`);
+      if (trust) {
+        document.getElementById(thumbprintFieldId).value = body.thumbprint;
+        setStatus(kind, 'Certificate thumbprint set - click Test & Save to apply it.', 'pending');
+      } else {
+        setStatus(kind, '', '');
+      }
+    } catch (err) {
+      setStatus(kind, `Could not detect a certificate: ${err}`, 'error');
+    }
+  }
+
+  async function removeIntegration(kind) {
+    if (!confirm(`Remove the ${cap(kind)} integration? Its saved password/token will be deleted too.`)) return;
+    setStatus(kind, 'Removing...', 'pending');
+    const res = await fetch(`/api/integrations/${kind}`, { method: 'DELETE' });
+    if (!res.ok) { setStatus(kind, 'Could not remove.', 'error'); return; }
+    setStatus(kind, 'Removed.', 'success');
+    await loadAll();
+  }
+
+  // ---- Proxmox ----
+  function proxmoxBody() {
+    return `
+      <div class="field-row" style="grid-template-columns: 2fr 1fr;">
+        <div class="field"><label>Host URL</label><input type="text" id="proxmox-baseUrl" placeholder="https://proxmox.local:8006" /></div>
+        <div class="field"><label>Realm</label><input type="text" id="proxmox-realm" placeholder="pam" /></div>
+      </div>
+      <div class="field"><label>Username</label><input type="text" id="proxmox-username" /></div>
+      <div class="field"><label>Password</label><input type="password" id="proxmox-password" placeholder="Leave blank to keep saved password" /></div>
+      <div class="field">
+        <label>Pinned certificate thumbprint (optional, for self-signed certs)</label>
+        <div style="display:flex; gap:0.5rem;">
+          <input type="text" id="proxmox-thumbprint" style="flex:1;" />
+          <button type="button" class="secondary" onclick="event.stopPropagation(); detectCertificate('proxmox','proxmox-baseUrl','proxmox-thumbprint')">Detect</button>
+        </div>
+        <div class="hint">Only needed if Proxmox serves a self-signed certificate, which is the common case on a LAN.</div>
+      </div>`;
+  }
+
+  async function testAndSaveProxmox() {
+    setBusy('proxmox', true);
+    setStatus('proxmox', 'Testing...', 'pending');
+    try {
+      const res = await fetch('/api/integrations/proxmox/test-and-save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseUrl: val('proxmox-baseUrl'), username: val('proxmox-username'), realm: val('proxmox-realm') || null,
+          password: val('proxmox-password') || null, pinnedCertificateSha256Thumbprint: val('proxmox-thumbprint') || null,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) { setStatus('proxmox', body.detail || 'Failed.', 'error'); return; }
+      setStatus('proxmox', body.message, 'success');
+      document.getElementById('proxmox-password').value = '';
+      await loadAll();
+    } catch (err) {
+      setStatus('proxmox', `Failed: ${err}`, 'error');
+    } finally {
+      setBusy('proxmox', false);
+    }
+  }
+
+  // ---- Pi-hole ----
+  function piholeBody() {
+    return `
+      <div class="field-row three">
+        <div class="field" style="grid-column: span 2;"><label>Host</label><input type="text" id="pihole-host" placeholder="pi.hole or 192.168.1.10" /></div>
+        <div class="field"><label>Port</label><input type="number" id="pihole-port" value="80" /></div>
+      </div>
+      <div class="checkbox-row"><input type="checkbox" id="pihole-https" /> <label for="pihole-https" style="margin:0;">Use HTTPS</label></div>
+      <div class="field"><label>App password</label><input type="password" id="pihole-password" placeholder="Leave blank to keep saved password" /></div>
+      <div class="field hint" style="margin-top:-0.4rem;">
+        Pi-hole v6's Settings &rarr; API &rarr; "App password" - not your web UI login password.
+      </div>
+      <div class="field">
+        <label>Pinned certificate thumbprint (optional, for self-signed certs)</label>
+        <div style="display:flex; gap:0.5rem;">
+          <input type="text" id="pihole-thumbprint" style="flex:1;" />
+          <button type="button" class="secondary" onclick="event.stopPropagation(); detectCertificateForPiHole()">Detect</button>
+        </div>
+      </div>`;
+  }
+
+  function detectCertificateForPiHole() {
+    const scheme = document.getElementById('pihole-https').checked ? 'https' : 'http';
+    const host = val('pihole-host'), port = val('pihole-port') || '443';
+    const baseUrl = `${scheme}://${host}:${port}`;
+    detectCertificateWithUrl('pihole', baseUrl, 'pihole-thumbprint');
+  }
+
+  async function detectCertificateWithUrl(kind, baseUrl, thumbprintFieldId) {
+    if (!baseUrl.includes('://')) { setStatus(kind, 'Enter a host first.', 'error'); return; }
+    setStatus(kind, 'Detecting certificate...', 'pending');
+    try {
+      const res = await fetch('/api/integrations/detect-certificate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseUrl }),
+      });
+      const body = await res.json();
+      if (!res.ok) { setStatus(kind, body.detail || 'Could not detect a certificate.', 'error'); return; }
+      const trust = confirm(`Certificate thumbprint (SHA-256):\n${body.thumbprint}\n\nTrust this certificate for this connection?`);
+      if (trust) {
+        document.getElementById(thumbprintFieldId).value = body.thumbprint;
+        setStatus(kind, 'Certificate thumbprint set - click Test & Save to apply it.', 'pending');
+      } else {
+        setStatus(kind, '', '');
+      }
+    } catch (err) {
+      setStatus(kind, `Could not detect a certificate: ${err}`, 'error');
+    }
+  }
+
+  async function testAndSavePihole() {
+    setBusy('pihole', true);
+    setStatus('pihole', 'Testing...', 'pending');
+    try {
+      const res = await fetch('/api/integrations/pihole/test-and-save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: val('pihole-host'), port: parseInt(val('pihole-port'), 10) || 80,
+          useHttps: document.getElementById('pihole-https').checked,
+          appPassword: val('pihole-password') || null, pinnedCertificateSha256Thumbprint: val('pihole-thumbprint') || null,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) { setStatus('pihole', body.detail || 'Failed.', 'error'); return; }
+      setStatus('pihole', body.message, 'success');
+      document.getElementById('pihole-password').value = '';
+      await loadAll();
+    } catch (err) {
+      setStatus('pihole', `Failed: ${err}`, 'error');
+    } finally {
+      setBusy('pihole', false);
+    }
+  }
+
+  // ---- UniFi ----
+  function unifiBody() {
+    return `
+      <div class="field-row">
+        <div class="field"><label>Controller URL</label><input type="text" id="unifi-baseUrl" placeholder="https://192.168.1.1" /></div>
+        <div class="field"><label>Site</label><input type="text" id="unifi-site" placeholder="default" /></div>
+      </div>
+      <div class="field"><label>Username</label><input type="text" id="unifi-username" /></div>
+      <div class="field"><label>Password</label><input type="password" id="unifi-password" placeholder="Leave blank to keep saved password" /></div>
+      <div class="field">
+        <label>TOTP secret (only if this account has 2FA enabled)</label>
+        <input type="password" id="unifi-totp" placeholder="Leave blank if no 2FA, or to keep saved secret" />
+        <div class="hint">The base32 setup key shown when you enabled 2FA, not a live 6-digit code.</div>
+      </div>
+      <div class="field">
+        <label>Pinned certificate thumbprint (optional, for self-signed certs)</label>
+        <div style="display:flex; gap:0.5rem;">
+          <input type="text" id="unifi-thumbprint" style="flex:1;" />
+          <button type="button" class="secondary" onclick="event.stopPropagation(); detectCertificate('unifi','unifi-baseUrl','unifi-thumbprint')">Detect</button>
+        </div>
+      </div>
+      <div class="field hint">
+        Needs a <strong>local-access-only</strong> admin account - a cloud/SSO-linked account can fail
+        with a generic "invalid credentials" error unrelated to the actual password.
+      </div>`;
+  }
+
+  async function testAndSaveUnifi() {
+    setBusy('unifi', true);
+    setStatus('unifi', 'Testing...', 'pending');
+    try {
+      const res = await fetch('/api/integrations/unifi/test-and-save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseUrl: val('unifi-baseUrl'), username: val('unifi-username'), site: val('unifi-site') || null,
+          password: val('unifi-password') || null, totpSecret: val('unifi-totp') || null,
+          pinnedCertificateSha256Thumbprint: val('unifi-thumbprint') || null,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) { setStatus('unifi', body.detail || 'Failed.', 'error'); return; }
+      setStatus('unifi', body.message, 'success');
+      document.getElementById('unifi-password').value = '';
+      document.getElementById('unifi-totp').value = '';
+      await loadAll();
+    } catch (err) {
+      setStatus('unifi', `Failed: ${err}`, 'error');
+    } finally {
+      setBusy('unifi', false);
+    }
+  }
+
+  function val(id) { return document.getElementById(id).value.trim(); }
+
+  async function loadAll() {
+    const res = await fetch('/api/integrations');
+    const data = await res.json();
+    STATE.proxmox = data.proxmox; STATE.pihole = data.pihole; STATE.unifi = data.unifi;
+    applyState('proxmox', data.proxmox, s => {
+      if (!s.configured) return;
+      document.getElementById('proxmox-baseUrl').value = s.baseUrl || '';
+      document.getElementById('proxmox-username').value = s.username || '';
+      document.getElementById('proxmox-realm').value = s.realm || 'pam';
+      document.getElementById('proxmox-thumbprint').value = s.pinnedCertificateSha256Thumbprint || '';
+    });
+    applyState('pihole', data.pihole, s => {
+      if (!s.configured) return;
+      document.getElementById('pihole-host').value = s.host || '';
+      document.getElementById('pihole-port').value = s.port || 80;
+      document.getElementById('pihole-https').checked = !!s.useHttps;
+      document.getElementById('pihole-thumbprint').value = s.pinnedCertificateSha256Thumbprint || '';
+    });
+    applyState('unifi', data.unifi, s => {
+      if (!s.configured) return;
+      document.getElementById('unifi-baseUrl').value = s.baseUrl || '';
+      document.getElementById('unifi-username').value = s.username || '';
+      document.getElementById('unifi-site').value = s.site || 'default';
+      document.getElementById('unifi-thumbprint').value = s.pinnedCertificateSha256Thumbprint || '';
+    });
+  }
+
+  function applyState(kind, s, fill) {
+    const badge = document.getElementById(`badge-${kind}`);
+    const sub = document.getElementById(`sub-${kind}`);
+    const removeBtn = document.getElementById(`remove-${kind}`);
+    if (s.configured) {
+      badge.textContent = 'Configured';
+      badge.className = 'badge configured';
+      sub.textContent = 'Leave the password field blank to keep the saved one.';
+      removeBtn.style.display = '';
+    } else {
+      badge.textContent = 'Not configured';
+      badge.className = 'badge not-configured';
+      sub.textContent = '';
+      removeBtn.style.display = 'none';
+    }
+    fill(s);
+  }
+
+  document.getElementById('main').insertAdjacentHTML('beforeend',
+    card('proxmox', 'Proxmox', proxmoxBody()) +
+    card('pihole', 'Pi-hole', piholeBody()) +
+    card('unifi', 'UniFi', unifiBody())
+  );
+
+  loadAll();
+</script>
+</body>
+</html>

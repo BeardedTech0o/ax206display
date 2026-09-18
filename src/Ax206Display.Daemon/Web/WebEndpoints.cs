@@ -36,6 +36,7 @@ public static partial class WebEndpoints
         app.MapGet("/api/devices/{deviceId}/preview.png", GetPreviewAsync);
         app.MapPut("/api/devices/{deviceId}/widgets", PutWidgetsAsync);
         app.MapPut("/api/devices/{deviceId}/brightness", PutBrightnessAsync);
+        app.MapPut("/api/devices/{deviceId}/name", PutNameAsync);
         app.MapGet("/api/devices/{deviceId}/background", GetBackgroundAsync);
         app.MapPost("/api/devices/{deviceId}/background", PostBackgroundAsync);
         app.MapDelete("/api/devices/{deviceId}/background", DeleteBackgroundAsync);
@@ -76,17 +77,17 @@ public static partial class WebEndpoints
         {
             if (string.IsNullOrWhiteSpace(widget.Id) || string.IsNullOrWhiteSpace(widget.Type))
             {
-                return Results.BadRequest("Every widget needs an id and a type.");
+                return Results.BadRequest(new { detail = "Every widget needs an id and a type." });
             }
 
             if (widget.Width <= 0 || widget.Height <= 0)
             {
-                return Results.BadRequest($"Widget '{widget.Id}' must have a positive width and height.");
+                return Results.BadRequest(new { detail = $"Widget '{widget.Id}' must have a positive width and height." });
             }
 
             if ((widget.Type is "stat" or "gauge") && string.IsNullOrWhiteSpace(widget.Settings?["dataKey"]?.GetValue<string>()))
             {
-                return Results.BadRequest($"Widget '{widget.Id}' ({widget.Type}) needs a dataKey setting.");
+                return Results.BadRequest(new { detail = $"Widget '{widget.Id}' ({widget.Type}) needs a dataKey setting." });
             }
         }
 
@@ -98,6 +99,16 @@ public static partial class WebEndpoints
     {
         var brightness = Math.Clamp(body.Brightness, 0, 7);
         return await UpdateDeviceAsync(deviceId, configService, device => device with { Brightness = brightness }, cancellationToken);
+    }
+
+    private static async Task<IResult> PutNameAsync(string deviceId, NameDto body, ConfigService configService, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(body.Name))
+        {
+            return Results.BadRequest(new { detail = "Name can't be empty." });
+        }
+
+        return await UpdateDeviceAsync(deviceId, configService, device => device with { Name = body.Name.Trim() }, cancellationToken);
     }
 
     private static async Task<IResult> GetBackgroundAsync(string deviceId, ConfigService configService, CancellationToken cancellationToken)
@@ -124,14 +135,14 @@ public static partial class WebEndpoints
     {
         if (!request.HasFormContentType)
         {
-            return Results.BadRequest("Expected a multipart/form-data upload with a 'file' field.");
+            return Results.BadRequest(new { detail = "Expected a multipart/form-data upload with a 'file' field." });
         }
 
         var form = await request.ReadFormAsync(cancellationToken);
         var file = form.Files.GetFile("file");
         if (file is null || file.Length == 0)
         {
-            return Results.BadRequest("No file uploaded.");
+            return Results.BadRequest(new { detail = "No file uploaded." });
         }
 
         // One fixed slot per device, same reasoning as
@@ -221,14 +232,14 @@ public static partial class WebEndpoints
     {
         if (!request.HasFormContentType)
         {
-            return Results.BadRequest("Expected a multipart/form-data upload with a 'file' field.");
+            return Results.BadRequest(new { detail = "Expected a multipart/form-data upload with a 'file' field." });
         }
 
         var form = await request.ReadFormAsync(cancellationToken);
         var file = form.Files.GetFile("file");
         if (file is null || file.Length == 0)
         {
-            return Results.BadRequest("No file uploaded.");
+            return Results.BadRequest(new { detail = "No file uploaded." });
         }
 
         var tempZipPath = Path.Combine(Path.GetTempPath(), $"ax206display-import-{Guid.NewGuid():N}.zip");
@@ -257,7 +268,7 @@ public static partial class WebEndpoints
         }
         catch (InvalidDataException ex)
         {
-            return Results.BadRequest(ex.Message);
+            return Results.BadRequest(new { detail = ex.Message });
         }
         finally
         {
@@ -328,6 +339,8 @@ public static partial class WebEndpoints
     private sealed record DeviceDetail(string Id, string Name, int ScreenWidth, int ScreenHeight, int Brightness, bool HasBackground, List<WidgetDto> Widgets);
 
     private sealed record BrightnessDto(int Brightness);
+
+    private sealed record NameDto(string Name);
 
     /// <summary>
     /// Wire shape for a widget over HTTP - a plain DTO rather than exposing

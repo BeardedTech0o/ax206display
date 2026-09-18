@@ -56,6 +56,7 @@ public static class HostFactory
         app.UseDefaultFiles();
         app.UseStaticFiles();
         WebEndpoints.Map(app);
+        IntegrationsEndpoints.Map(app);
         return app;
     }
 

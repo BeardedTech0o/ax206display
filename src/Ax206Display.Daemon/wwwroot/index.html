@@ -91,6 +91,7 @@
     <p>Connected AX206 panels on this host</p>
   </div>
   <div class="actions">
+    <a class="btn" href="/integrations.html" style="background:transparent;color:var(--text);border:1px solid var(--border);">Integrations</a>
     <a class="btn" href="/api/config/export" download>Export Config</a>
     <input id="importFile" type="file" accept=".zip" />
     <button id="importButton">Import Config</button>
@@ -159,7 +160,7 @@
       const response = await fetch('/api/config/import', { method: 'POST', body: formData });
       const body = await response.json();
       if (!response.ok) {
-        status.textContent = body.title || body.detail || 'Import failed.';
+        status.textContent = body.detail || 'Import failed.';
         status.className = 'error';
         return;
       }
