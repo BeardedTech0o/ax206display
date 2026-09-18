@@ -1,0 +1,46 @@
+[Unit]
+Description=AX206 Display daemon
+Documentation=https://github.com/BeardedTech0o/ax206display
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=/opt/ax206display/ax206display-daemon
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+
+User=ax206display
+Group=ax206display
+
+# StateDirectory/ConfigurationDirectory: systemd creates and owns
+# /var/lib/ax206display and /etc/ax206display for this unit (mode 0750,
+# owned by the User/Group above) - no manual `mkdir`/`chown` needed as part
+# of install. See LinuxPaths.cs for why these exact paths.
+StateDirectory=ax206display
+ConfigurationDirectory=ax206display
+Environment=AX206DISPLAY_CONFIG_PATH=/etc/ax206display/config.json
+Environment=AX206DISPLAY_SECRETS_PATH=/var/lib/ax206display/secrets.dat
+Environment=AX206DISPLAY_SECRET_KEY_PATH=/var/lib/ax206display/protector.key
+
+# Hardening. The ax206display group (see 99-ax206display.rules) is what
+# actually grants USB access, not a broad device allowlist here - this unit
+# otherwise runs as an ordinary unprivileged service.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+
+[Install]
+WantedBy=multi-user.target

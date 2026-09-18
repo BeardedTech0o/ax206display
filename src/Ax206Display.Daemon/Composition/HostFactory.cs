@@ -30,6 +30,12 @@ public static class HostFactory
     public static IHost Create(string[] args)
     {
         return Host.CreateDefaultBuilder(args)
+            // A no-op when not launched by systemd (e.g. `dotnet run` during
+            // development) - only takes effect when the NOTIFY_SOCKET
+            // environment variable is present, which systemd sets itself for
+            // a Type=notify unit. Lets the unit use Type=notify/WatchdogSec
+            // instead of the fixed guess-a-startup-time Type=simple.
+            .UseSystemd()
             .ConfigureServices(ConfigureServices)
             .Build();
     }

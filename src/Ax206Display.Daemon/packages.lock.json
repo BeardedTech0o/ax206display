@@ -32,6 +32,15 @@
           "Microsoft.Extensions.Options": "10.0.0"
         }
       },
+      "Microsoft.Extensions.Hosting.Systemd": {
+        "type": "Direct",
+        "requested": "[10.0.0, )",
+        "resolved": "10.0.0",
+        "contentHash": "N9Ax84RrOWZ7RATSO6caW5mbFvcI63NhPj9jPk/kHlHrOar5wPyDuSsALcqut3vkTuap1h/Bisx8uZQzToMOug==",
+        "dependencies": {
+          "Microsoft.Extensions.Hosting": "10.0.0"
+        }
+      },
       "Microsoft.Extensions.Http": {
         "type": "Direct",
         "requested": "[10.0.0, )",

@@ -1,0 +1,22 @@
+# udev rule granting the ax206display group read/write access to AX206 USB
+# LCD panels, so the daemon (running as the unprivileged ax206display system
+# user - see ax206display-daemon.service) doesn't need root/CAP_SYS_ADMIN
+# for USB I/O.
+#
+# 1908:0102 is the only VID/PID pair documented for AX206 panels in normal
+# runtime mode (see docs/protocol-spec.md §8), including commercially sold
+# "USB LCD monitor" units. 1908:3318 is the same chip's mask-ROM bootloader
+# mode (firmware recovery only, not a display) - included so a panel stuck
+# in bootloader mode is still accessible for recovery.
+#
+# The daemon's own device discovery deliberately does NOT filter by
+# VID/PID (see LibUsbAx206DeviceDiscovery) so unlisted clones still work
+# once physically discoverable - but udev needs a concrete match to grant
+# permissions ahead of time. If you have a clone reporting a different
+# VID/PID, add a matching line here with the same GROUP/MODE.
+#
+# Install: copy to /etc/udev/rules.d/, then:
+#   udevadm control --reload-rules && udevadm trigger
+
+SUBSYSTEM=="usb", ATTR{idVendor}=="1908", ATTR{idProduct}=="0102", GROUP="ax206display", MODE="0660"
+SUBSYSTEM=="usb", ATTR{idVendor}=="1908", ATTR{idProduct}=="3318", GROUP="ax206display", MODE="0660"
