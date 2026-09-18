@@ -7,10 +7,12 @@ Scheduler auto-start. It's built and tested against **Debian 13 (Trixie)**,
 running as a VM guest with the AX206 panel's USB device passed through from
 the Proxmox host - the setup below assumes that.
 
-There's no web UI yet (that's the next milestone) - for now this gets the
-daemon itself running headlessly and driving a display end to end, using the
-same `config.json` format as the Windows app (hand-edit it for now; see
-`AppConfig`/`DeviceProfileConfig` in `Ax206Display.Config.Models`).
+It also serves a small web UI (on port 8080) with a live preview of each
+display's current layout and config export/import - see
+[Web UI](#web-ui) below. Widget layouts themselves (add/move/resize/delete)
+are still edited by hand in `config.json` for now (see
+`AppConfig`/`DeviceProfileConfig` in `Ax206Display.Config.Models`) - an
+editable designer is the next milestone.
 
 ## 1. Pass the USB display through to the VM
 
@@ -89,6 +91,43 @@ appear on the panel within a few seconds. If it logs `No AX206 displays
 found`, double check the USB passthrough in step 1 - from inside the VM,
 `lsusb` should list a `1908:0102` device.
 
+## Web UI
+
+Open `http://<vm-address>:8080` in a browser. It shows a card per connected
+display with a live preview (refreshed every 2 seconds, rendered
+server-side with the exact same compositor/widgets the physical panel
+uses - what you see in the browser is what's on the panel), plus two
+buttons:
+
+- **Export Config** - downloads a `.zip` containing `config.json` and every
+  device's background image, if any.
+- **Import Config** - upload a `.zip` from either this daemon or the
+  Windows app (see below) to adopt its devices/integrations. Matching
+  device/integration `Id`s are replaced; anything else is added alongside
+  what's already configured, not wiped.
+
+If port 8080 isn't reachable, check the VM's firewall (`ufw`/`nftables`) -
+the systemd unit itself doesn't restrict which interfaces it listens on.
+
+### Migrating from the Windows app
+
+The Windows tray app has matching **Export Config...**/**Import Config...**
+tray menu items using the same `.zip` format, so moving your layouts over is
+a straight export-on-Windows, import-on-Linux (or the reverse):
+
+1. On Windows: tray icon -> **Export Config...** -> save the `.zip`.
+2. Copy it to wherever you're browsing the Linux daemon's web UI from.
+3. Open `http://<vm-address>:8080`, use **Import Config**, pick the file.
+
+**Integration passwords/API tokens don't travel in the package** - they're
+encrypted with a key tied to the machine that created them (DPAPI on
+Windows, the AES key file described below on Linux), which can't be
+recreated on the other machine. Both the export and import steps say this
+in the UI; re-enter passwords for any imported integrations afterward. USB
+device `Id`s (serial-number-based) are the same regardless of which OS the
+panel is plugged into, so an imported device profile matches up with the
+physical panel automatically once you reconnect it.
+
 ## Updating
 
 Re-run `publish.sh`, copy the new output over, and re-run `install.sh` -
@@ -127,7 +166,8 @@ world-readable.
 - **GPU stats** are always unavailable - there's no dependency-free way to
   read them for an arbitrary GPU vendor on Linux; left as a future
   milestone if there's demand.
-- **No widget designer GUI yet.** Edit `/etc/ax206display/config.json` by
-  hand for now (the daemon polls it every few seconds and hot-reloads
-  changes, same as the Windows app). The web-based designer is the next
-  milestone.
+- **No editable widget designer yet** - the web UI (see above) shows a live
+  preview and handles config export/import, but adding/moving/resizing
+  widgets is still done by hand-editing `/etc/ax206display/config.json`
+  (the daemon polls it every few seconds and hot-reloads changes, same as
+  the Windows app). An editable designer is the next milestone.

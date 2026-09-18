@@ -3,6 +3,7 @@ using Ax206Display.Config.Services;
 using Ax206Display.Daemon.Secrets;
 using Ax206Display.Daemon.Services;
 using Ax206Display.Daemon.SystemMonitor;
+using Ax206Display.Daemon.Web;
 using Ax206Display.DataSources.Network;
 using Ax206Display.DataSources.Proxmox;
 using Ax206Display.DataSources.SystemMonitor;
@@ -10,14 +11,17 @@ using Ax206Display.DataSources.Weather;
 using Ax206Display.Rendering.Playback;
 using Ax206Display.Transport.Discovery;
 using Ax206Display.Transport.LibUsb;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace Ax206Display.Daemon.Composition;
 
 /// <summary>
-/// Builds the daemon's Generic Host - the Linux/headless counterpart to
-/// Ax206Display.App's HostFactory. Wires the same interfaces to the same
+/// Builds the daemon's host - the Linux/headless counterpart to
+/// Ax206Display.App's HostFactory, plus the web designer UI that replaces
+/// the WPF app's Widget Designer/Integrations windows (see
+/// <see cref="WebEndpoints"/>), all in one process/one systemd unit rather
+/// than a second service. Wires the same interfaces to the same
 /// cross-platform implementations (Protocol/Transport/Rendering/DataSources
 /// are untouched), swapping only the two Windows-only pieces: DPAPI secret
 /// protection becomes a local key-file-backed one
@@ -27,20 +31,35 @@ namespace Ax206Display.Daemon.Composition;
 /// </summary>
 public static class HostFactory
 {
-    public static IHost Create(string[] args)
+    public static WebApplication Create(string[] args)
     {
-        return Host.CreateDefaultBuilder(args)
-            // A no-op when not launched by systemd (e.g. `dotnet run` during
-            // development) - only takes effect when the NOTIFY_SOCKET
-            // environment variable is present, which systemd sets itself for
-            // a Type=notify unit. Lets the unit use Type=notify/WatchdogSec
-            // instead of the fixed guess-a-startup-time Type=simple.
-            .UseSystemd()
-            .ConfigureServices(ConfigureServices)
-            .Build();
+        var builder = WebApplication.CreateBuilder(args);
+
+        // A no-op when not launched by systemd (e.g. `dotnet run` during
+        // development) - only takes effect when the NOTIFY_SOCKET
+        // environment variable is present, which systemd sets itself for a
+        // Type=notify unit. Lets the unit use Type=notify/WatchdogSec instead
+        // of the fixed guess-a-startup-time Type=simple.
+        builder.Host.UseSystemd();
+
+        // A LAN-reachable service, not a localhost-only dev server -
+        // ASPNETCORE_URLS (e.g. set by a systemd Environment= override)
+        // still wins if someone sets it explicitly.
+        if (Environment.GetEnvironmentVariable("ASPNETCORE_URLS") is null)
+        {
+            builder.WebHost.UseUrls("http://0.0.0.0:8080");
+        }
+
+        ConfigureServices(builder.Services);
+
+        var app = builder.Build();
+        app.UseDefaultFiles();
+        app.UseStaticFiles();
+        WebEndpoints.Map(app);
+        return app;
     }
 
-    private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)
+    private static void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton(_ => new ConfigService(LinuxPaths.GetConfigPath()));
         services.AddSingleton<ISecretProtector>(_ => new LinuxFileSecretProtector(LinuxPaths.GetSecretKeyPath()));

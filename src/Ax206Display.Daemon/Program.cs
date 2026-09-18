@@ -1,4 +1,4 @@
 using Ax206Display.Daemon.Composition;
 
-var host = HostFactory.Create(args);
-await host.RunAsync();
+var app = HostFactory.Create(args);
+await app.RunAsync();

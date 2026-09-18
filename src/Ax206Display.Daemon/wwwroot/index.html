@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ax206Display</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #14161a;
+    --panel: #1c1f26;
+    --border: #2c313c;
+    --text: #e6e8eb;
+    --muted: #8b93a1;
+    --accent: #5b9dfd;
+    --accent-text: #0b1220;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  header h1 { font-size: 1.1rem; margin: 0; font-weight: 600; }
+  header p { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.85rem; }
+  .actions { display: flex; gap: 0.5rem; align-items: center; }
+  main { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .card .preview {
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    background: #000;
+    display: block;
+    object-fit: contain;
+  }
+  .card .meta { padding: 0.75rem 1rem; }
+  .card .meta h2 { font-size: 0.95rem; margin: 0 0 0.15rem; }
+  .card .meta p { margin: 0; color: var(--muted); font-size: 0.8rem; }
+  .empty { color: var(--muted); padding: 2rem 0; text-align: center; }
+  button, .btn {
+    background: var(--accent);
+    color: var(--accent-text);
+    border: none;
+    border-radius: 6px;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  input[type="file"] {
+    color: var(--muted);
+    font-size: 0.8rem;
+    max-width: 180px;
+  }
+  #importStatus {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 0.5rem;
+  }
+  #importStatus.error { color: #f28b82; }
+  #importStatus.success { color: #81c995; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Ax206Display</h1>
+    <p>Connected AX206 panels on this host</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/api/config/export" download>Export Config</a>
+    <input id="importFile" type="file" accept=".zip" />
+    <button id="importButton">Import Config</button>
+  </div>
+</header>
+<main>
+  <div id="grid" class="grid"></div>
+  <div id="importStatus"></div>
+</main>
+<script>
+  const REFRESH_INTERVAL_MS = 2000;
+
+  async function loadDevices() {
+    const grid = document.getElementById('grid');
+    let devices;
+    try {
+      const response = await fetch('/api/devices');
+      devices = await response.json();
+    } catch {
+      grid.innerHTML = '<div class="empty">Could not reach the daemon.</div>';
+      return;
+    }
+
+    if (devices.length === 0) {
+      grid.innerHTML = '<div class="empty">No displays configured yet - plug one in and it will auto-provision a default layout.</div>';
+      return;
+    }
+
+    grid.innerHTML = devices.map(d => `
+      <div class="card">
+        <img class="preview" id="preview-${cssId(d.id)}" src="/api/devices/${encodeURIComponent(d.id)}/preview.png" alt="${escapeHtml(d.name)}" />
+        <div class="meta">
+          <h2>${escapeHtml(d.name)}</h2>
+          <p>${d.screenWidth}&times;${d.screenHeight} &middot; ${d.widgetCount} widget${d.widgetCount === 1 ? '' : 's'} &middot; brightness ${d.brightness}/7</p>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function refreshPreviews() {
+    document.querySelectorAll('img.preview').forEach(img => {
+      const base = img.src.split('?')[0];
+      img.src = `${base}?t=${Date.now()}`;
+    });
+  }
+
+  function cssId(id) { return id.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+  function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+  document.getElementById('importButton').addEventListener('click', async () => {
+    const input = document.getElementById('importFile');
+    const status = document.getElementById('importStatus');
+    if (!input.files.length) {
+      status.textContent = 'Choose a .zip config package first.';
+      status.className = 'error';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+
+    status.textContent = 'Importing...';
+    status.className = '';
+    try {
+      const response = await fetch('/api/config/import', { method: 'POST', body: formData });
+      const body = await response.json();
+      if (!response.ok) {
+        status.textContent = body.title || body.detail || 'Import failed.';
+        status.className = 'error';
+        return;
+      }
+      status.textContent = `Imported ${body.deviceCount} device(s), ${body.integrationCount} integration(s). ${body.note}`;
+      status.className = 'success';
+      await loadDevices();
+    } catch (err) {
+      status.textContent = `Import failed: ${err}`;
+      status.className = 'error';
+    }
+  });
+
+  loadDevices();
+  setInterval(refreshPreviews, REFRESH_INTERVAL_MS);
+  setInterval(loadDevices, 15000);
+</script>
+</body>
+</html>
