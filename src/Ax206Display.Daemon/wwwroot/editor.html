@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ax206Display - Layout Editor</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #14161a;
+    --panel: #1c1f26;
+    --border: #2c313c;
+    --text: #e6e8eb;
+    --muted: #8b93a1;
+    --accent: #5b9dfd;
+    --accent-text: #0b1220;
+    --danger: #f28b82;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
+  header a { color: var(--muted); font-size: 0.85rem; text-decoration: none; }
+  header a:hover { color: var(--text); }
+  main {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1rem;
+    padding: 1rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    align-items: start;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .canvas-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+  #stage {
+    position: relative;
+    background: #000 no-repeat center / cover;
+    margin: 0 auto;
+    outline: 1px solid var(--border);
+    user-select: none;
+    /* Matches FrameCompositor's own per-widget ClipRect - a widget box
+       dragged/resized past the canvas edge looks clipped here exactly like
+       it will on the actual panel, instead of implying it'll draw outside
+       the visible screen. */
+    overflow: hidden;
+  }
+  .widget-box {
+    position: absolute;
+    border: 1.5px dashed rgba(255,255,255,0.5);
+    background: rgba(91,157,253,0.12);
+    color: #fff;
+    font-size: 11px;
+    overflow: hidden;
+    cursor: move;
+    display: flex;
+    align-items: flex-start;
+    padding: 2px 4px;
+  }
+  .widget-box.selected { border-color: var(--accent); border-style: solid; background: rgba(91,157,253,0.25); }
+  .widget-box .resize-handle {
+    position: absolute;
+    right: -5px;
+    bottom: -5px;
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    border-radius: 3px;
+    cursor: nwse-resize;
+  }
+  .toolbar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+  .panel h2 { font-size: 0.85rem; margin: 0 0 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .panel + .panel { margin-top: 1rem; }
+  .field { margin-bottom: 0.6rem; }
+  .field label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.2rem; }
+  .field input[type="text"], .field input[type="number"], .field select {
+    width: 100%;
+    background: #10121600;
+    background: #0f1116;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.85rem;
+  }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .checkbox-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--muted); }
+  button, .btn {
+    background: var(--accent);
+    color: var(--accent-text);
+    border: none;
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  button.danger { background: var(--danger); color: #2a0e0c; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  select#addType { flex: 1; }
+  .empty-hint { color: var(--muted); font-size: 0.8rem; padding: 1rem 0; text-align: center; }
+  #status { font-size: 0.75rem; color: var(--muted); margin-left: auto; }
+  #status.saving { color: var(--accent); }
+  #status.error { color: var(--danger); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 id="deviceName">Loading...</h1>
+    <a href="/">&larr; Back to devices</a>
+  </div>
+  <span id="status"></span>
+</header>
+<main>
+  <div class="canvas-wrap">
+    <div class="toolbar">
+      <select id="addType">
+        <option value="clock">Clock</option>
+        <option value="text">Text Label</option>
+        <option value="stat">System Stat</option>
+        <option value="gauge">Gauge</option>
+      </select>
+      <button id="addButton">Add Widget</button>
+      <button id="deleteButton" class="danger" disabled>Delete Selected</button>
+    </div>
+    <div id="stage"></div>
+  </div>
+  <div>
+    <div class="panel">
+      <h2>Widget</h2>
+      <div id="widgetFields"><p class="empty-hint">Select a widget on the canvas, or add a new one.</p></div>
+    </div>
+    <div class="panel">
+      <h2>Background</h2>
+      <input id="backgroundFile" type="file" accept="image/*" style="margin-bottom: 0.5rem; font-size: 0.8rem; color: var(--muted);" />
+      <div style="display:flex; gap:0.5rem;">
+        <button id="uploadBackgroundButton">Upload</button>
+        <button id="removeBackgroundButton" class="secondary">Remove</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Brightness</h2>
+      <input id="brightness" type="range" min="0" max="7" step="1" style="width:100%;" />
+    </div>
+  </div>
+</main>
+<script>
+  const params = new URLSearchParams(location.search);
+  const deviceId = params.get('device');
+  if (!deviceId) { document.body.innerHTML = '<p style="padding:2rem;color:#f28b82;">No ?device= specified.</p>'; throw new Error('no device'); }
+
+  // Kept in sync by hand with the *StatKeys classes in Ax206Display.DataSources
+  // (SystemStatKeys, NetworkSpeedKeys, PiHoleStatKeys, UniFiStatKeys) - see
+  // those for the authoritative list. A key typo here only means a missing
+  // dropdown entry, not a rendering bug: WidgetFactory/the widgets
+  // themselves don't validate dataKey against a fixed enum, an unrecognized
+  // key just renders as blank/"--" the same way an unavailable sensor does.
+  const STAT_KEYS = [
+    ['system.cpu.load', 'CPU Load'], ['system.cpu.temp', 'CPU Temperature'], ['system.memory.used', 'Memory Used'],
+    ['system.gpu.load', 'GPU Load'], ['system.gpu.temp', 'GPU Temperature'],
+    ['network.download.mbps', 'Network Download'], ['network.upload.mbps', 'Network Upload'],
+    ['pihole.adsBlockedToday', 'Pi-hole: Ads Blocked Today'], ['pihole.adsPercentageToday', 'Pi-hole: Blocked Percentage'],
+    ['pihole.dnsQueriesToday', 'Pi-hole: DNS Queries Today'], ['pihole.domainsOnBlocklist', 'Pi-hole: Domains on Blocklist'],
+    ['pihole.queriesCached', 'Pi-hole: Queries Cached'], ['pihole.queriesForwarded', 'Pi-hole: Queries Forwarded'],
+    ['pihole.uniqueDomains', 'Pi-hole: Unique Domains'], ['pihole.activeClients', 'Pi-hole: Active Clients'], ['pihole.totalClients', 'Pi-hole: Total Clients'],
+    ['unifi.clientCount', 'UniFi: Connected Clients'], ['unifi.lan.clientCount', 'UniFi: LAN Clients'], ['unifi.wlan.clientCount', 'UniFi: WLAN Clients'],
+    ['unifi.wan.download.mbps', 'UniFi: WAN Download'], ['unifi.wan.upload.mbps', 'UniFi: WAN Upload'],
+  ];
+  const FONT_FAMILIES = ['', 'Segoe UI', 'Arial', 'Consolas', 'Courier New', 'Impact', 'Times New Roman', 'Verdana', 'Trebuchet MS', 'Georgia', 'Comic Sans MS', 'Space Mono'];
+  const TIME_FORMATS = ['HH:mm:ss', 'HH:mm', 'hh:mm tt', 'hh:mm:ss tt'];
+  const MAX_STAGE_WIDTH = 720;
+
+  let device = null;
+  let widgets = [];
+  let selectedId = null;
+  let scale = 1;
+  let nextZOrder = 1;
+
+  const stage = document.getElementById('stage');
+  const statusEl = document.getElementById('status');
+
+  function setStatus(text, cls) {
+    statusEl.textContent = text;
+    statusEl.className = cls || '';
+  }
+
+  async function load() {
+    const res = await fetch(`/api/devices/${encodeURIComponent(deviceId)}`);
+    if (!res.ok) { document.body.innerHTML = '<p style="padding:2rem;color:#f28b82;">Device not found.</p>'; return; }
+    device = await res.json();
+    widgets = device.widgets;
+    nextZOrder = 1 + widgets.reduce((max, w) => Math.max(max, w.zOrder), 0);
+    document.getElementById('deviceName').textContent = `Editing: ${device.name}`;
+    document.getElementById('brightness').value = device.brightness;
+
+    scale = Math.min(1, MAX_STAGE_WIDTH / device.screenWidth);
+    stage.style.width = `${device.screenWidth * scale}px`;
+    stage.style.height = `${device.screenHeight * scale}px`;
+    refreshBackground();
+    renderWidgets();
+  }
+
+  function refreshBackground() {
+    stage.style.backgroundImage = device.hasBackground
+      ? `url(/api/devices/${encodeURIComponent(deviceId)}/background?t=${Date.now()})`
+      : 'none';
+  }
+
+  function renderWidgets() {
+    stage.innerHTML = '';
+    for (const w of widgets) {
+      const box = document.createElement('div');
+      box.className = 'widget-box' + (w.id === selectedId ? ' selected' : '');
+      box.style.left = `${w.x * scale}px`;
+      box.style.top = `${w.y * scale}px`;
+      box.style.width = `${w.width * scale}px`;
+      box.style.height = `${w.height * scale}px`;
+      box.textContent = `${w.type}${w.settings?.label ? ': ' + w.settings.label : ''}`;
+      box.dataset.id = w.id;
+
+      box.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('resize-handle')) return;
+        selectWidget(w.id);
+        startDrag(e, w);
+      });
+
+      const handle = document.createElement('div');
+      handle.className = 'resize-handle';
+      handle.addEventListener('mousedown', (e) => { e.stopPropagation(); selectWidget(w.id); startResize(e, w); });
+      box.appendChild(handle);
+
+      stage.appendChild(box);
+    }
+  }
+
+  function startDrag(e, widget) {
+    e.preventDefault();
+    const startX = e.clientX, startY = e.clientY;
+    const originX = widget.x, originY = widget.y;
+
+    function onMove(ev) {
+      // Clamped to stay fully on-canvas (not just x/y >= 0) - #stage clips
+      // overflow to match the real per-widget ClipRect (see its CSS
+      // comment), so a widget allowed to hang off the edge would drag its
+      // own resize handle out of the clipped, unclickable area with it.
+      const maxX = Math.max(0, device.screenWidth - widget.width);
+      const maxY = Math.max(0, device.screenHeight - widget.height);
+      widget.x = Math.min(maxX, Math.max(0, Math.round(originX + (ev.clientX - startX) / scale)));
+      widget.y = Math.min(maxY, Math.max(0, Math.round(originY + (ev.clientY - startY) / scale)));
+      renderWidgets();
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      renderFieldsPanel();
+      saveWidgets();
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  function startResize(e, widget) {
+    e.preventDefault();
+    const startX = e.clientX, startY = e.clientY;
+    const originW = widget.width, originH = widget.height;
+
+    function onMove(ev) {
+      const maxWidth = Math.max(10, device.screenWidth - widget.x);
+      const maxHeight = Math.max(10, device.screenHeight - widget.y);
+      widget.width = Math.min(maxWidth, Math.max(10, Math.round(originW + (ev.clientX - startX) / scale)));
+      widget.height = Math.min(maxHeight, Math.max(10, Math.round(originH + (ev.clientY - startY) / scale)));
+      renderWidgets();
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      renderFieldsPanel();
+      saveWidgets();
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  function selectWidget(id) {
+    selectedId = id;
+    document.getElementById('deleteButton').disabled = false;
+    renderWidgets();
+    renderFieldsPanel();
+  }
+
+  function renderFieldsPanel() {
+    const container = document.getElementById('widgetFields');
+    const w = widgets.find(x => x.id === selectedId);
+    if (!w) { container.innerHTML = '<p class="empty-hint">Select a widget on the canvas, or add a new one.</p>'; return; }
+    w.settings = w.settings || {};
+
+    const fontFamilyOptions = FONT_FAMILIES.map(f => `<option value="${f}" ${w.settings.fontFamily === f ? 'selected' : ''}>${f || 'Default'}</option>`).join('');
+
+    let typeFields = '';
+    if (w.type === 'clock') {
+      typeFields = `
+        <div class="field"><label>Time format</label>
+          <select data-setting="timeFormat">${TIME_FORMATS.map(f => `<option ${w.settings.timeFormat === f ? 'selected' : ''}>${f}</option>`).join('')}</select>
+        </div>`;
+    } else if (w.type === 'text') {
+      typeFields = `<div class="field"><label>Text</label><input type="text" data-setting="text" value="${escapeAttr(w.settings.text || '')}" /></div>`;
+    } else if (w.type === 'stat' || w.type === 'gauge') {
+      typeFields = `
+        <div class="field"><label>Data source</label>
+          <select data-setting="dataKey">${STAT_KEYS.map(([k, label]) => `<option value="${k}" ${w.settings.dataKey === k ? 'selected' : ''}>${label}</option>`).join('')}</select>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Label</label><input type="text" data-setting="label" value="${escapeAttr(w.settings.label || '')}" /></div>
+          <div class="field"><label>Unit</label><input type="text" data-setting="unit" value="${escapeAttr(w.settings.unit || '')}" /></div>
+        </div>
+        <div class="field"><label>Decimals</label><input type="number" min="0" max="4" data-setting-int="decimals" value="${w.settings.decimals ?? 0}" /></div>`;
+      if (w.type === 'gauge') {
+        typeFields += `
+        <div class="field-row">
+          <div class="field"><label>Min value</label><input type="number" data-setting-num="minValue" value="${w.settings.minValue ?? 0}" /></div>
+          <div class="field"><label>Max value</label><input type="number" data-setting-num="maxValue" value="${w.settings.maxValue ?? 100}" /></div>
+        </div>
+        <div class="field"><label>Gauge color (hex)</label><input type="text" data-setting="gaugeColor" value="${escapeAttr(w.settings.gaugeColor || '')}" placeholder="#5B9DFD" /></div>`;
+      }
+    }
+
+    container.innerHTML = `
+      <div class="field-row">
+        <div class="field"><label>X</label><input type="number" id="fieldX" value="${w.x}" /></div>
+        <div class="field"><label>Y</label><input type="number" id="fieldY" value="${w.y}" /></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Width</label><input type="number" id="fieldWidth" value="${w.width}" /></div>
+        <div class="field"><label>Height</label><input type="number" id="fieldHeight" value="${w.height}" /></div>
+      </div>
+      <div class="field"><label>Z-order</label><input type="number" id="fieldZ" value="${w.zOrder}" /></div>
+      <hr style="border-color: var(--border); margin: 0.75rem 0;" />
+      ${typeFields}
+      <div class="field"><label>Text color (hex)</label><input type="text" data-setting="textColor" value="${escapeAttr(w.settings.textColor || '')}" placeholder="#FFFFFF" /></div>
+      <div class="field-row">
+        <div class="field"><label>Font family</label><select data-setting="fontFamily">${fontFamilyOptions}</select></div>
+        <div class="field"><label>Font size (px, blank = auto)</label><input type="number" data-setting-num="fontSizePx" value="${w.settings.fontSizePx ?? ''}" /></div>
+      </div>
+      <div class="checkbox-row"><input type="checkbox" id="fieldBold" ${w.settings.bold ? 'checked' : ''} /> <label for="fieldBold" style="margin:0;">Bold</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="fieldItalic" ${w.settings.italic ? 'checked' : ''} /> <label for="fieldItalic" style="margin:0;">Italic</label></div>
+    `;
+
+    // Clamped the same way drag/resize are (see startDrag/startResize) so a
+    // typed value can't push the widget's resize handle into the clipped,
+    // unclickable area outside #stage either.
+    document.getElementById('fieldX').addEventListener('change', e => {
+      w.x = Math.min(Math.max(0, device.screenWidth - w.width), Math.max(0, parseInt(e.target.value, 10) || 0));
+      renderWidgets(); saveWidgets();
+    });
+    document.getElementById('fieldY').addEventListener('change', e => {
+      w.y = Math.min(Math.max(0, device.screenHeight - w.height), Math.max(0, parseInt(e.target.value, 10) || 0));
+      renderWidgets(); saveWidgets();
+    });
+    document.getElementById('fieldWidth').addEventListener('change', e => {
+      w.width = Math.min(device.screenWidth - w.x, Math.max(1, parseInt(e.target.value, 10) || 1));
+      renderWidgets(); saveWidgets();
+    });
+    document.getElementById('fieldHeight').addEventListener('change', e => {
+      w.height = Math.min(device.screenHeight - w.y, Math.max(1, parseInt(e.target.value, 10) || 1));
+      renderWidgets(); saveWidgets();
+    });
+    document.getElementById('fieldZ').addEventListener('change', e => { w.zOrder = parseInt(e.target.value, 10) || 0; saveWidgets(); });
+    document.getElementById('fieldBold').addEventListener('change', e => { w.settings.bold = e.target.checked; saveWidgets(); });
+    document.getElementById('fieldItalic').addEventListener('change', e => { w.settings.italic = e.target.checked; saveWidgets(); });
+
+    container.querySelectorAll('[data-setting]').forEach(el => {
+      el.addEventListener('change', e => {
+        const key = e.target.dataset.setting;
+        if (e.target.value === '') delete w.settings[key]; else w.settings[key] = e.target.value;
+        renderWidgets();
+        saveWidgets();
+      });
+    });
+    container.querySelectorAll('[data-setting-int]').forEach(el => {
+      el.addEventListener('change', e => {
+        w.settings[e.target.dataset.settingInt] = parseInt(e.target.value, 10) || 0;
+        saveWidgets();
+      });
+    });
+    container.querySelectorAll('[data-setting-num]').forEach(el => {
+      el.addEventListener('change', e => {
+        const key = e.target.dataset.settingNum;
+        if (e.target.value === '') delete w.settings[key]; else w.settings[key] = parseFloat(e.target.value);
+        saveWidgets();
+      });
+    });
+  }
+
+  function escapeAttr(s) { return String(s).replace(/"/g, '&quot;'); }
+
+  async function saveWidgets() {
+    setStatus('Saving...', 'saving');
+    try {
+      const res = await fetch(`/api/devices/${encodeURIComponent(deviceId)}/widgets`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(widgets),
+      });
+      if (!res.ok) { setStatus(`Save failed: ${await res.text()}`, 'error'); return; }
+      setStatus('Saved');
+    } catch (err) {
+      setStatus(`Save failed: ${err}`, 'error');
+    }
+  }
+
+  document.getElementById('addButton').addEventListener('click', () => {
+    const type = document.getElementById('addType').value;
+    const width = type === 'gauge' ? Math.round(device.screenWidth / 3) : Math.round(device.screenWidth / 3);
+    const height = type === 'gauge' ? width : Math.round(device.screenHeight / 4);
+    const widget = {
+      id: `${type}-${Math.random().toString(36).slice(2, 10)}`,
+      type,
+      x: Math.max(0, Math.round((device.screenWidth - width) / 2)),
+      y: Math.max(0, Math.round((device.screenHeight - height) / 2)),
+      width, height,
+      zOrder: nextZOrder++,
+      settings: type === 'stat' || type === 'gauge' ? { dataKey: STAT_KEYS[0][0], label: 'CPU', unit: '%' } : (type === 'text' ? { text: 'Label' } : {}),
+    };
+    widgets.push(widget);
+    selectWidget(widget.id);
+    saveWidgets();
+  });
+
+  document.getElementById('deleteButton').addEventListener('click', () => {
+    if (!selectedId) return;
+    widgets = widgets.filter(w => w.id !== selectedId);
+    selectedId = null;
+    document.getElementById('deleteButton').disabled = true;
+    renderWidgets();
+    renderFieldsPanel();
+    saveWidgets();
+  });
+
+  document.getElementById('brightness').addEventListener('change', async (e) => {
+    setStatus('Saving...', 'saving');
+    const res = await fetch(`/api/devices/${encodeURIComponent(deviceId)}/brightness`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brightness: parseInt(e.target.value, 10) }),
+    });
+    setStatus(res.ok ? 'Saved' : 'Save failed', res.ok ? '' : 'error');
+  });
+
+  document.getElementById('uploadBackgroundButton').addEventListener('click', async () => {
+    const input = document.getElementById('backgroundFile');
+    if (!input.files.length) { setStatus('Choose an image first', 'error'); return; }
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+    setStatus('Uploading...', 'saving');
+    const res = await fetch(`/api/devices/${encodeURIComponent(deviceId)}/background`, { method: 'POST', body: formData });
+    if (!res.ok) { setStatus('Upload failed', 'error'); return; }
+    device.hasBackground = true;
+    refreshBackground();
+    setStatus('Saved');
+  });
+
+  document.getElementById('removeBackgroundButton').addEventListener('click', async () => {
+    setStatus('Removing...', 'saving');
+    const res = await fetch(`/api/devices/${encodeURIComponent(deviceId)}/background`, { method: 'DELETE' });
+    if (!res.ok) { setStatus('Remove failed', 'error'); return; }
+    device.hasBackground = false;
+    refreshBackground();
+    setStatus('Saved');
+  });
+
+  stage.addEventListener('mousedown', (e) => {
+    if (e.target === stage) { selectedId = null; document.getElementById('deleteButton').disabled = true; renderWidgets(); renderFieldsPanel(); }
+  });
+
+  load();
+</script>
+</body>
+</html>

@@ -193,7 +193,14 @@ public static class ConfigPackageService
         return candidate;
     }
 
-    private static string SanitizePathComponent(string value)
+    /// <summary>
+    /// Replaces characters invalid in a file name (plus ':'/'@', common in
+    /// device Ids like "usb:1908:0102@1-1") with '_'. Public so other code
+    /// deriving a safe directory/file name from a device Id - e.g. the web
+    /// UI's background-upload endpoint - uses the exact same rule as config
+    /// packages do, rather than a second slightly-different sanitizer.
+    /// </summary>
+    public static string SanitizePathComponent(string value)
     {
         var invalidChars = Path.GetInvalidFileNameChars();
         var sanitized = new char[value.Length];

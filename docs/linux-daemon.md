@@ -7,12 +7,9 @@ Scheduler auto-start. It's built and tested against **Debian 13 (Trixie)**,
 running as a VM guest with the AX206 panel's USB device passed through from
 the Proxmox host - the setup below assumes that.
 
-It also serves a small web UI (on port 8080) with a live preview of each
-display's current layout and config export/import - see
-[Web UI](#web-ui) below. Widget layouts themselves (add/move/resize/delete)
-are still edited by hand in `config.json` for now (see
-`AppConfig`/`DeviceProfileConfig` in `Ax206Display.Config.Models`) - an
-editable designer is the next milestone.
+It also serves a small web UI (on port 8080) - a dashboard with a live
+preview of each display plus config export/import, and a drag/resize/edit
+layout editor per device - see [Web UI](#web-ui) below.
 
 ## 1. Pass the USB display through to the VM
 
@@ -105,6 +102,14 @@ buttons:
   Windows app (see below) to adopt its devices/integrations. Matching
   device/integration `Id`s are replaced; anything else is added alongside
   what's already configured, not wiped.
+- **Edit Layout** (per card) - opens a per-device editor: drag widgets to
+  move them, drag a widget's bottom-right corner to resize it, and a side
+  panel for its type-specific settings (data source, label/unit, text
+  color, font, time format, gauge range, etc.), plus background
+  upload/remove and a brightness slider. Every change saves immediately -
+  there's no separate "Save" step - and reaches the physical panel the same
+  way a hand-edit to `config.json` always has: `DisplayManagerHostedService`
+  polls the file every few seconds and hot-reloads it.
 
 If port 8080 isn't reachable, check the VM's firewall (`ufw`/`nftables`) -
 the systemd unit itself doesn't restrict which interfaces it listens on.
@@ -166,8 +171,9 @@ world-readable.
 - **GPU stats** are always unavailable - there's no dependency-free way to
   read them for an arbitrary GPU vendor on Linux; left as a future
   milestone if there's demand.
-- **No editable widget designer yet** - the web UI (see above) shows a live
-  preview and handles config export/import, but adding/moving/resizing
-  widgets is still done by hand-editing `/etc/ax206display/config.json`
-  (the daemon polls it every few seconds and hot-reloads changes, same as
-  the Windows app). An editable designer is the next milestone.
+- **The web editor covers layout/background/brightness, not orientation or
+  integrations setup** - device orientation and the Pi-hole/UniFi/Proxmox/
+  weather integration forms are still configured by hand-editing
+  `/etc/ax206display/config.json` (`IntegrationConfig` in
+  `Ax206Display.Config.Models`) plus setting secrets via `SecretStore`;
+  there's no web form for those yet.

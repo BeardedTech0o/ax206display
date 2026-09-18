@@ -125,6 +125,7 @@
         <div class="meta">
           <h2>${escapeHtml(d.name)}</h2>
           <p>${d.screenWidth}&times;${d.screenHeight} &middot; ${d.widgetCount} widget${d.widgetCount === 1 ? '' : 's'} &middot; brightness ${d.brightness}/7</p>
+          <p><a class="btn" style="margin-top:0.5rem;" href="/editor.html?device=${encodeURIComponent(d.id)}">Edit Layout</a></p>
         </div>
       </div>
     `).join('');
