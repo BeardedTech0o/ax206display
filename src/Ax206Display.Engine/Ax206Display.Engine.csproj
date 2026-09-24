@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The display engine both front ends share: device supervision, the data
+    pump services and their DI wiring. Plain net8.0 so it runs under the
+    Windows tray app and the Linux web server alike - nothing in here may
+    touch WPF or any other Windows-only UI stack.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <!-- Direct reference so the [LoggerMessage] source generator runs on this project's own code. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ax206Display.Config\Ax206Display.Config.csproj" />
+    <ProjectReference Include="..\Ax206Display.DataSources\Ax206Display.DataSources.csproj" />
+    <ProjectReference Include="..\Ax206Display.Protocol\Ax206Display.Protocol.csproj" />
+    <ProjectReference Include="..\Ax206Display.Rendering\Ax206Display.Rendering.csproj" />
+    <ProjectReference Include="..\Ax206Display.Transport\Ax206Display.Transport.csproj" />
+  </ItemGroup>
+
+</Project>

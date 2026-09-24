@@ -17,9 +17,12 @@
 
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
 
-    <!-- Pinned to the last version with a plain net8.0 target; 4.148.0 moved to a later scheme -->
-    <PackageVersion Include="SkiaSharp" Version="3.119.2" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="3.119.2" />
+    <!-- Last 3.x line (4.148.0 moved to a later scheme). Must be >= 3.119.4 on
+         Linux ARM: 3.118-3.119.2's ARM natives don't link libfontconfig and
+         crash on first font use with "undefined symbol: uuid_generate_random"
+         (mono/SkiaSharp#3272) - i.e. every Raspberry Pi. -->
+    <PackageVersion Include="SkiaSharp" Version="3.119.4" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="3.119.4" />
     <!-- Pinned to the last version with a net8.0-windows target; 3.119.4 moved to net9.0-windows. -->
     <PackageVersion Include="SkiaSharp.Views.WPF" Version="3.119.2" />
 
@@ -27,6 +30,8 @@
     <PackageVersion Include="H.NotifyIcon.Wpf" Version="2.3.2" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="8.0.1" />
+    <!-- sd_notify readiness + journald-friendly logging for the Linux server's systemd unit. -->
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Systemd" Version="8.0.1" />
 
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />

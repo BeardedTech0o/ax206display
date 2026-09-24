@@ -1,0 +1,3 @@
+# AX206-based USB LCD panels in display mode (1908:0102). Lets the
+# ax206display service account open them without running as root.
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1908", ATTR{idProduct}=="0102", MODE="0660", GROUP="ax206display"

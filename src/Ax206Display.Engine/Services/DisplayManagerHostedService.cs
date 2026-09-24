@@ -11,7 +11,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
 
-namespace Ax206Display.App.Services;
+namespace Ax206Display.Engine.Services;
 
 /// <summary>
 /// The composition root's device orchestrator: discovers connected AX206
@@ -65,6 +65,9 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
         _logger = logger;
     }
 
+    /// <summary>Device IDs whose display loop is running right now (connected and blitting), for status UIs.</summary>
+    public IReadOnlyCollection<string> ConnectedDeviceIds => _loopsByDeviceId.Keys.ToArray();
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         _loopCancellation = new CancellationTokenSource();
@@ -79,7 +82,8 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
         }
         else
         {
-            var configChanged = false;
+            var newProfiles = new List<DeviceProfileConfig>();
+            var toSupervise = new List<IAx206Transport>();
 
             foreach (var transport in discovered)
             {
@@ -103,18 +107,23 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
                         continue;
                     }
 
-                    config = config with { Devices = [.. config.Devices, profile] };
-                    configChanged = true;
+                    newProfiles.Add(profile);
                     LogAutoProvisioned(transport.DeviceId, profile.ScreenWidth, profile.ScreenHeight);
                 }
 
-                _supervisedDeviceIds.TryAdd(transport.DeviceId, 0);
-                _loopTasks.Add(SuperviseDeviceAsync(transport.DeviceId, transport, _loopCancellation.Token));
+                toSupervise.Add(transport);
             }
 
-            if (configChanged)
+            // Saved before any supervisor starts: each one begins by loading
+            // its profile from config, and one that finds none exits for
+            // good - which is what used to happen to every display seen for
+            // the very first time, until the next app restart.
+            await SaveNewProfilesAsync(newProfiles, cancellationToken);
+
+            foreach (var transport in toSupervise)
             {
-                await _configService.SaveAsync(config, cancellationToken);
+                _supervisedDeviceIds.TryAdd(transport.DeviceId, 0);
+                _loopTasks.Add(SuperviseDeviceAsync(transport.DeviceId, transport, _loopCancellation.Token));
             }
         }
 
@@ -150,8 +159,8 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
         // its live transport mid-blit and knock an otherwise-healthy display
         // offline - see IAx206DeviceDiscovery.DiscoverAsync(excludeDeviceIds, ...).
         var discovered = await DiscoverSafelyAsync(cancellationToken, _loopsByDeviceId.Keys.ToArray());
-        var configChanged = false;
-        var newDeviceCount = 0;
+        var newProfiles = new List<DeviceProfileConfig>();
+        var toSupervise = new List<IAx206Transport>();
 
         foreach (var transport in discovered)
         {
@@ -178,21 +187,37 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
                     continue;
                 }
 
-                config = config with { Devices = [.. config.Devices, profile] };
-                configChanged = true;
+                newProfiles.Add(profile);
                 LogAutoProvisioned(transport.DeviceId, profile.ScreenWidth, profile.ScreenHeight);
             }
 
-            _loopTasks.Add(SuperviseDeviceAsync(transport.DeviceId, transport, _loopCancellation.Token));
-            newDeviceCount++;
+            toSupervise.Add(transport);
         }
 
-        if (configChanged)
+        // Before starting supervisors, for the reason given in StartAsync.
+        try
         {
-            await _configService.SaveAsync(config, cancellationToken);
+            await SaveNewProfilesAsync(newProfiles, cancellationToken);
+        }
+        catch
+        {
+            // Release the claims, or these devices could never be picked
+            // up again by a later refresh.
+            foreach (var transport in toSupervise)
+            {
+                _supervisedDeviceIds.TryRemove(transport.DeviceId, out _);
+                transport.Dispose();
+            }
+
+            throw;
         }
 
-        return newDeviceCount;
+        foreach (var transport in toSupervise)
+        {
+            _loopTasks.Add(SuperviseDeviceAsync(transport.DeviceId, transport, _loopCancellation.Token));
+        }
+
+        return toSupervise.Count;
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -384,6 +409,27 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
             .Select(id => id[..id.IndexOf('@')]);
 
         _discovery.SeedKnownAmbiguousSerialNumbers(knownAmbiguousSerials);
+    }
+
+    /// <summary>
+    /// Appends freshly provisioned profiles through <see cref="ConfigService.UpdateAsync"/>
+    /// rather than saving a config loaded before the (slow) USB scan, so a
+    /// layout saved from a UI in the meantime isn't reverted. A profile some
+    /// other writer already added for the same device wins.
+    /// </summary>
+    private async Task SaveNewProfilesAsync(List<DeviceProfileConfig> newProfiles, CancellationToken cancellationToken)
+    {
+        if (newProfiles.Count == 0)
+        {
+            return;
+        }
+
+        await _configService.UpdateAsync(
+            config => config with
+            {
+                Devices = [.. config.Devices, .. newProfiles.Where(p => config.Devices.All(d => d.Id != p.Id))],
+            },
+            cancellationToken);
     }
 
     private static async Task<bool> DelaySafelyAsync(TimeSpan delay, CancellationToken cancellationToken)

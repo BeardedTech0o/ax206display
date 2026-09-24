@@ -1,10 +1,7 @@
 using System.Globalization;
-// Needed explicitly: the WindowsDesktop SDK removes System.IO from the
-// implicit-usings set that plain net8.0 projects get.
-using System.IO;
 using Microsoft.Extensions.Logging;
 
-namespace Ax206Display.App.Logging;
+namespace Ax206Display.Engine.Logging;
 
 /// <summary>
 /// Minimal append-only file logger so a tray app with no console still leaves

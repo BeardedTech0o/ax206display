@@ -2,51 +2,40 @@ using Ax206Display.Config.Models;
 using Ax206Display.Config.Secrets;
 using Ax206Display.Config.Services;
 using Ax206Display.DataSources.Http;
-using Ax206Display.DataSources.Proxmox;
+using Ax206Display.DataSources.PiHole;
 using Ax206Display.Rendering.Playback;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Ax206Display.App.Services;
+namespace Ax206Display.Engine.Services;
 
 /// <summary>
-/// Polls every node and VM/container from a configured Proxmox integration
-/// (Kind == "proxmox" in AppConfig.Integrations) and publishes their
-/// CPU/memory (and each node's uptime) into the RenderDataHub, plus keeps
-/// ProxmoxGuestDirectory/ProxmoxNodeDirectory current so the Widget Designer
-/// can list them without touching the network itself. Idles quietly
-/// (checking again next poll) if no Proxmox integration is configured yet,
-/// and re-authenticates automatically if the session ticket is rejected
-/// (e.g. after it expires).
+/// Polls a configured Pi-hole integration (Kind == "pihole" in
+/// AppConfig.Integrations) and publishes its summary stats into the
+/// RenderDataHub. Pi-hole v6 replaced v5's stateless per-request API token
+/// with a session login (an "app password" traded for a session id), so
+/// this logs in once and reuses that session, re-authenticating
+/// automatically if a poll fails (e.g. the session expired) - same shape as
+/// ProxmoxPumpService/UniFiPumpService. Idles quietly if not configured yet.
 /// </summary>
-public sealed partial class ProxmoxPumpService : BackgroundService
+public sealed partial class PiHolePumpService : BackgroundService
 {
-    private const string IntegrationKind = "proxmox";
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
+    private const string IntegrationKind = "pihole";
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(10);
 
     private readonly ConfigService _configService;
     private readonly SecretStore _secretStore;
     private readonly RenderDataHub _hub;
-    private readonly ProxmoxGuestDirectory _guestDirectory;
-    private readonly ProxmoxNodeDirectory _nodeDirectory;
-    private readonly ILogger<ProxmoxPumpService> _logger;
+    private readonly ILogger<PiHolePumpService> _logger;
 
-    private IProxmoxClient? _client;
+    private IPiHoleClient? _client;
     private string? _loggedInIntegrationId;
 
-    public ProxmoxPumpService(
-        ConfigService configService,
-        SecretStore secretStore,
-        RenderDataHub hub,
-        ProxmoxGuestDirectory guestDirectory,
-        ProxmoxNodeDirectory nodeDirectory,
-        ILogger<ProxmoxPumpService> logger)
+    public PiHolePumpService(ConfigService configService, SecretStore secretStore, RenderDataHub hub, ILogger<PiHolePumpService> logger)
     {
         _configService = configService;
         _secretStore = secretStore;
         _hub = hub;
-        _guestDirectory = guestDirectory;
-        _nodeDirectory = nodeDirectory;
         _logger = logger;
     }
 
@@ -64,7 +53,7 @@ public sealed partial class ProxmoxPumpService : BackgroundService
             {
                 LogPollFailed(ex);
                 // Force a fresh login attempt next time - the failure may
-                // have been an expired/rejected session ticket.
+                // have been an expired/rejected session id.
                 _client = null;
                 _loggedInIntegrationId = null;
             }
@@ -102,40 +91,35 @@ public sealed partial class ProxmoxPumpService : BackgroundService
             }
         }
 
-        var nodes = await _client.GetNodeStatusesAsync(cancellationToken);
-        ProxmoxStatsPublisher.PublishNodes(nodes, _hub.Publish);
-        _nodeDirectory.Update(nodes);
-
-        var guests = await _client.GetGuestStatusesAsync(cancellationToken);
-        ProxmoxStatsPublisher.Publish(guests, _hub.Publish);
-        _guestDirectory.Update(guests);
+        var summary = await _client.GetSummaryAsync(cancellationToken);
+        PiHoleStatsPublisher.Publish(summary, _hub.Publish);
     }
 
-    private async Task<IProxmoxClient?> LogInAsync(IntegrationConfig integration, CancellationToken cancellationToken)
+    private async Task<IPiHoleClient?> LogInAsync(IntegrationConfig integration, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(integration.Username) || string.IsNullOrEmpty(integration.SecretKey))
+        if (string.IsNullOrEmpty(integration.SecretKey))
         {
             LogMissingCredentials(integration.Id);
             return null;
         }
 
         await _secretStore.LoadAsync(cancellationToken);
-        var password = _secretStore.GetSecret(integration.SecretKey);
-        if (string.IsNullOrEmpty(password))
+        var appPassword = _secretStore.GetSecret(integration.SecretKey);
+        if (string.IsNullOrEmpty(appPassword))
         {
             LogMissingCredentials(integration.Id);
             return null;
         }
 
         var httpClient = IntegrationHttpClientFactory.Create(integration, enableCookies: false);
-        var client = new ProxmoxClient(httpClient);
-        await client.LoginAsync(integration.Username, password, integration.Realm ?? "pam", cancellationToken);
+        var client = new PiHoleClient(httpClient);
+        await client.LoginAsync(appPassword, cancellationToken);
         return client;
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Proxmox poll failed; will retry.")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Pi-hole poll failed; will retry.")]
     private partial void LogPollFailed(Exception exception);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Proxmox integration {IntegrationId} is missing a username or password; skipping.")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Pi-hole integration {IntegrationId} is missing its app password; skipping.")]
     private partial void LogMissingCredentials(string integrationId);
 }

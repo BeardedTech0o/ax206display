@@ -5,11 +5,12 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Ax206Display.App.Services;
 using Ax206Display.App.Views.Designer;
 using Ax206Display.Config.Models;
 using Ax206Display.Config.Services;
 using Ax206Display.DataSources.Proxmox;
+using Ax206Display.Engine.Catalog;
+using Ax206Display.Engine.Services;
 using Ax206Display.Rendering.Compositing;
 using Ax206Display.Rendering.Playback;
 using Ax206Display.Rendering.Widgets;
@@ -829,56 +830,11 @@ public partial class WidgetDesignerWindow : Window
     }
 
     /// <summary>
-    /// The fixed system/network/integration keys plus one entry per
-    /// currently-known Proxmox node (CPU/memory/uptime) and guest
-    /// (CPU/memory) - read from ProxmoxNodeDirectory/ProxmoxGuestDirectory,
-    /// plain in-memory snapshots the pump service keeps current, so opening
-    /// this panel never makes a network call of its own.
+    /// See <see cref="WidgetCatalog.BuildAvailableStatKeys"/> - reads plain
+    /// in-memory snapshots, so opening this panel never touches the network.
     /// </summary>
-    private List<WidgetCatalog.StatKeyDescriptor> BuildAvailableStatKeys()
-    {
-        var keys = new List<WidgetCatalog.StatKeyDescriptor>(WidgetCatalog.StatKeys);
-
-        foreach (var node in _proxmoxNodeDirectory.GetSnapshot())
-        {
-            keys.Add(new WidgetCatalog.StatKeyDescriptor(
-                ProxmoxNodeKeys.CpuUsedPercent(node.Node),
-                WidgetCatalog.CategoryProxmox,
-                $"{node.Node} CPU",
-                node.Node,
-                "%"));
-            keys.Add(new WidgetCatalog.StatKeyDescriptor(
-                ProxmoxNodeKeys.MemoryUsedPercent(node.Node),
-                WidgetCatalog.CategoryProxmox,
-                $"{node.Node} Memory",
-                node.Node,
-                "%"));
-            keys.Add(new WidgetCatalog.StatKeyDescriptor(
-                ProxmoxNodeKeys.UptimeDays(node.Node),
-                WidgetCatalog.CategoryProxmox,
-                $"{node.Node} Uptime",
-                node.Node,
-                " days"));
-        }
-
-        foreach (var guest in _proxmoxGuestDirectory.GetSnapshot())
-        {
-            keys.Add(new WidgetCatalog.StatKeyDescriptor(
-                ProxmoxGuestKeys.CpuUsedPercent(guest.VmId),
-                WidgetCatalog.CategoryProxmox,
-                $"{guest.Name} CPU",
-                guest.Name,
-                "%"));
-            keys.Add(new WidgetCatalog.StatKeyDescriptor(
-                ProxmoxGuestKeys.MemoryUsedPercent(guest.VmId),
-                WidgetCatalog.CategoryProxmox,
-                $"{guest.Name} Memory",
-                guest.Name,
-                "%"));
-        }
-
-        return keys;
-    }
+    private List<WidgetCatalog.StatKeyDescriptor> BuildAvailableStatKeys() =>
+        WidgetCatalog.BuildAvailableStatKeys(_proxmoxNodeDirectory, _proxmoxGuestDirectory);
 
     /// <summary>
     /// The "Reading" dropdown shared by the stat and gauge widgets: every

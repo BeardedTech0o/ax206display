@@ -1,9 +1,16 @@
 # ax206display
 
-A Windows system-tray app that drives multiple USB AX206-based LCD screens
-(the common 3.5" 480x320 "USB LCD monitor" panels and similar), each with its
-own independently configured widget layout: system monitoring, images/GIFs,
-a clock, weather (Open-Meteo), UniFi, and Proxmox status.
+Drives multiple USB AX206-based LCD screens (the common 3.5" 480x320 "USB
+LCD monitor" panels and similar), each with its own independently configured
+widget layout: system monitoring, images/GIFs, a clock, weather (Open-Meteo),
+Pi-hole, UniFi, and Proxmox status.
+
+It runs two ways:
+
+- **Windows:** a system-tray app with a desktop Widget Designer.
+- **Linux / Raspberry Pi:** a background service you manage from a web page
+  in any browser on your network. See
+  [`docs/raspberry-pi.md`](docs/raspberry-pi.md).
 
 The AX206 USB protocol is not publicly documented by its vendor; this project
 reverse-derives it from public reference implementations - see
@@ -14,7 +21,13 @@ citations, and known gaps.
 
 ## Download
 
-Prebuilt Windows builds are published on the
+**Raspberry Pi / Linux:** grab `ax206display-*-linux-arm64.tar.gz` (64-bit
+Raspberry Pi OS), `-linux-arm` (32-bit) or `-linux-x64` from the
+[Releases page](https://github.com/BeardedTech0o/ax206display/releases),
+unpack it and run `sudo ./install.sh`. Full walkthrough in
+[`docs/raspberry-pi.md`](docs/raspberry-pi.md).
+
+**Windows:** prebuilt Windows builds are published on the
 [Releases page](https://github.com/BeardedTech0o/ax206display/releases) - no
 separate .NET install required either way:
 
@@ -43,9 +56,11 @@ yet wired into a widget UI.
 | `Ax206Display.Protocol` | net8.0 | AX206 command/CBW/CSW byte-level protocol, no I/O |
 | `Ax206Display.Transport` | net8.0 | `IAx206Transport` + a mock, a LibUsbDotNet-based transport, and a WinUSB P/Invoke fallback |
 | `Ax206Display.Rendering` | net8.0 | SkiaSharp-based widget compositor and pixel-format conversion |
-| `Ax206Display.DataSources` | net8.0 | System sensors (LibreHardwareMonitorLib), Open-Meteo weather, UniFi, Proxmox clients |
-| `Ax206Display.Config` | net8.0 | JSON config models/service, DPAPI-backed secret store |
-| `Ax206Display.App` | net8.0-windows | The WPF tray app: DI host, tray icon/menu, Task Scheduler auto-start, widget-designer window |
+| `Ax206Display.DataSources` | net8.0 | System sensors (LibreHardwareMonitorLib on Windows, `/proc` and `/sys` on Linux), Open-Meteo weather, Pi-hole, UniFi, Proxmox clients |
+| `Ax206Display.Config` | net8.0 | JSON config models/service; secret store backed by DPAPI on Windows, an AES-GCM key file elsewhere |
+| `Ax206Display.Engine` | net8.0 | What both front ends share: the device supervisor, data pump services, widget catalog, integration setup, and one DI registration (`AddAx206DisplayCore`) that picks the right platform pieces |
+| `Ax206Display.App` | net8.0-windows | The WPF tray app: tray icon/menu, Task Scheduler auto-start, widget-designer window |
+| `Ax206Display.Server` | net8.0 | The Linux service: ASP.NET Core host with the web UI (`wwwroot`, no build step), cookie login, systemd integration |
 | `Ax206Display.Tests` | net8.0 | xUnit tests for every project above except `App` |
 
 All USB I/O goes through the `IAx206Transport` interface so
@@ -59,7 +74,7 @@ VID/PID: it probes candidate devices with the protocol's own
 Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 
 ```sh
-# Everything except the WPF app (works on Linux/macOS/Windows):
+# Everything except the WPF app, including the Linux server (works on Linux/macOS/Windows):
 dotnet build Ax206Display.CrossPlatform.slnf
 dotnet test Ax206Display.CrossPlatform.slnf
 
@@ -78,8 +93,11 @@ solution including the WPF app.
 TLS to UniFi/Proxmox uses certificate pinning
 (`IntegrationConfig.PinnedCertificateSha256Thumbprint`), not a blanket
 "accept any certificate" bypass, since both commonly serve self-signed
-certs on a LAN. Secrets are DPAPI-encrypted at rest (`Ax206Display.Config.Secrets`)
-and their in-memory buffers are zeroed after use. The app currently runs
+certs on a LAN. Secrets are DPAPI-encrypted at rest on Windows and
+AES-256-GCM-encrypted with an owner-only key file on Linux
+(`Ax206Display.Config.Secrets`), and their in-memory buffers are zeroed after
+use. The Linux service's web login, sandboxing and network exposure are
+covered in [`docs/raspberry-pi.md`](docs/raspberry-pi.md#security-notes). The app currently runs
 elevated (`requireAdministrator`) for USB/Task Scheduler access; see
 [`docs/privilege-separation.md`](docs/privilege-separation.md) for a proposed
 design to shrink that to a minimal elevated broker process in a future

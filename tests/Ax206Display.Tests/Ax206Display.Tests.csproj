@@ -33,6 +33,8 @@
     <ProjectReference Include="..\..\src\Ax206Display.Rendering\Ax206Display.Rendering.csproj" />
     <ProjectReference Include="..\..\src\Ax206Display.DataSources\Ax206Display.DataSources.csproj" />
     <ProjectReference Include="..\..\src\Ax206Display.Config\Ax206Display.Config.csproj" />
+    <ProjectReference Include="..\..\src\Ax206Display.Engine\Ax206Display.Engine.csproj" />
+    <ProjectReference Include="..\..\src\Ax206Display.Server\Ax206Display.Server.csproj" />
   </ItemGroup>
 
 </Project>

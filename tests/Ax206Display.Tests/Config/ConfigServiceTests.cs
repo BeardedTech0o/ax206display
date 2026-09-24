@@ -68,6 +68,38 @@ public class ConfigServiceTests : IDisposable
         Assert.True(File.Exists(_configPath));
     }
 
+    [Fact]
+    public async Task UpdateAsync_ConcurrentUpdates_AreNotLost()
+    {
+        using var service = new ConfigService(_configPath);
+
+        // Each update appends one integration; without serialization, two
+        // updates would load the same snapshot and one append would vanish.
+        await Task.WhenAll(Enumerable.Range(0, 20).Select(i => Task.Run(() => service.UpdateAsync(config => config with
+        {
+            Integrations = [.. config.Integrations, new IntegrationConfig { Id = $"i{i}", Kind = "test", BaseUrl = "http://x" }],
+        }))));
+
+        var loaded = await service.LoadAsync();
+        Assert.Equal(20, loaded.Integrations.Count);
+    }
+
+    [Fact]
+    public async Task SaveAsync_OnUnix_LeavesTheDirectoryOwnerOnly()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var service = new ConfigService(_configPath);
+        await service.SaveAsync(new AppConfig());
+
+        Assert.Equal(
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+            File.GetUnixFileMode(Path.GetDirectoryName(_configPath)!));
+    }
+
     public void Dispose()
     {
         Directory.Delete(_tempDirectory, recursive: true);

@@ -1,15 +1,7 @@
-using Ax206Display.App.Logging;
 using Ax206Display.App.Services;
 using Ax206Display.App.Views;
-using Ax206Display.Config.Secrets;
-using Ax206Display.Config.Services;
-using Ax206Display.DataSources.Network;
-using Ax206Display.DataSources.Proxmox;
-using Ax206Display.DataSources.SystemMonitor;
-using Ax206Display.DataSources.Weather;
-using Ax206Display.Rendering.Playback;
-using Ax206Display.Transport.Discovery;
-using Ax206Display.Transport.LibUsb;
+using Ax206Display.Engine.Composition;
+using Ax206Display.Engine.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -29,29 +21,14 @@ public static class HostFactory
 
     private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)
     {
-        services.AddSingleton(_ => new ConfigService(ConfigService.GetDefaultConfigPath()));
-        services.AddSingleton<ISecretProtector, DpapiSecretProtector>();
-        services.AddSingleton(sp => new SecretStore(sp.GetRequiredService<ISecretProtector>(), ConfigService.GetDefaultSecretStorePath()));
-
-        services.AddSingleton<IAx206DeviceDiscovery, LibUsbAx206DeviceDiscovery>();
-        services.AddSingleton<ISystemMonitorSource, LibreHardwareMonitorSystemSource>();
-        services.AddSingleton<INetworkSpeedSource, NetworkInterfaceSpeedSource>();
-        services.AddHttpClient<IWeatherSource, OpenMeteoWeatherSource>();
-
-        services.AddSingleton<RenderDataHub>();
-        services.AddSingleton<IRenderDataProvider>(sp => sp.GetRequiredService<RenderDataHub>());
-        services.AddSingleton<ProxmoxGuestDirectory>();
-        services.AddSingleton<ProxmoxNodeDirectory>();
-
+        // Registered ahead of the core services: hosted services start in
+        // registration order, and the tray icon should appear straight away
+        // rather than after the display manager's initial USB scan.
         services.AddSingleton<TrayIconHostedService>();
         services.AddHostedService(sp => sp.GetRequiredService<TrayIconHostedService>());
-        services.AddHostedService<SystemMonitorPumpService>();
-        services.AddHostedService<NetworkSpeedPumpService>();
-        services.AddHostedService<ProxmoxPumpService>();
-        services.AddHostedService<PiHolePumpService>();
-        services.AddHostedService<UniFiPumpService>();
-        services.AddSingleton<DisplayManagerHostedService>();
-        services.AddHostedService(sp => sp.GetRequiredService<DisplayManagerHostedService>());
+
+        services.AddAx206DisplayCore(Ax206DisplayPaths.ForWindows());
+
         services.AddTransient<WidgetDesignerWindow>();
         services.AddTransient<IntegrationsWindow>();
     }

@@ -167,3 +167,39 @@ jobs:
             "${{ steps.asset.outputs.zipName }}.sha256" `
             --title "${{ steps.tag.outputs.tag }}" `
             --generate-notes
+
+  # Self-contained Linux tarballs (no .NET install needed on the target),
+  # attached to the release the Windows job above just created.
+  release-linux:
+    name: Publish Linux release (${{ matrix.rid }})
+    needs: release-windows-exe
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # arm64 = 64-bit Raspberry Pi OS (Pi 3/4/5), arm = 32-bit Pi OS.
+        rid: [linux-arm64, linux-arm, linux-x64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then tag="${{ inputs.tag }}"; else tag="${{ github.ref_name }}"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build tarball
+        run: packaging/linux/build-release.sh ${{ matrix.rid }} ${{ steps.tag.outputs.tag }} artifacts
+
+      - name: Attach to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ steps.tag.outputs.tag }}" \
+            "artifacts/ax206display-${{ steps.tag.outputs.tag }}-${{ matrix.rid }}.tar.gz" \
+            "artifacts/ax206display-${{ steps.tag.outputs.tag }}-${{ matrix.rid }}.tar.gz.sha256" \
+            --clobber

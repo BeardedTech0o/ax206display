@@ -3,11 +3,13 @@ namespace Ax206Display.Protocol.Discovery;
 public sealed record KnownUsbIdentifier(int VendorId, int ProductId, string Description);
 
 /// <summary>
-/// USB VID/PID pairs documented by the reference implementations, for display
-/// in compatibility docs/logging only. Device discovery (Ax206Display.Transport)
-/// must NOT filter on this list - it enumerates all USB devices and confirms a
+/// USB VID/PID pairs documented by the reference implementations, for
+/// compatibility docs/logging. Device discovery (Ax206Display.Transport) must
+/// NOT filter on this list - it enumerates all USB devices and confirms a
 /// real AX206 display by sending the GetLcdParameters probe and checking the
-/// response looks sane, so unlisted/rebadged clones still work.
+/// response looks sane, so unlisted/rebadged clones still work. The one
+/// exception is Linux kernel-driver detaching, which is too disruptive to
+/// attempt on anything but <see cref="RuntimeDisplays"/>.
 /// </summary>
 public static class KnownUsbIdentifiers
 {
@@ -16,4 +18,7 @@ public static class KnownUsbIdentifiers
         new KnownUsbIdentifier(0x1908, 0x0102, "AX206-based photo frame / USB LCD monitor (normal runtime mode)"),
         new KnownUsbIdentifier(0x1908, 0x3318, "AX206 mask-ROM bootloader mode (firmware recovery only, not a display)"),
     ];
+
+    /// <summary>The subset of <see cref="All"/> that is a working display (excludes bootloader mode).</summary>
+    public static readonly IReadOnlyList<KnownUsbIdentifier> RuntimeDisplays = [All[0]];
 }

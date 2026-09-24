@@ -118,6 +118,15 @@ public sealed class SecretStore
         }
     }
 
+    /// <summary>Whether a secret is stored under <paramref name="key"/>, without decrypting it.</summary>
+    public bool HasSecret(string key)
+    {
+        lock (_syncRoot)
+        {
+            return _encryptedByKey.ContainsKey(key);
+        }
+    }
+
     public void RemoveSecret(string key)
     {
         lock (_syncRoot)

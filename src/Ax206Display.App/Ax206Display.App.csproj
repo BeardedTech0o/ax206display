@@ -28,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Ax206Display.Config\Ax206Display.Config.csproj" />
     <ProjectReference Include="..\Ax206Display.DataSources\Ax206Display.DataSources.csproj" />
+    <ProjectReference Include="..\Ax206Display.Engine\Ax206Display.Engine.csproj" />
     <ProjectReference Include="..\Ax206Display.Protocol\Ax206Display.Protocol.csproj" />
     <ProjectReference Include="..\Ax206Display.Rendering\Ax206Display.Rendering.csproj" />
     <ProjectReference Include="..\Ax206Display.Transport\Ax206Display.Transport.csproj" />

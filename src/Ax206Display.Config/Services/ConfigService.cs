@@ -9,7 +9,7 @@ namespace Ax206Display.Config.Services;
 /// computed here, which keeps this class usable from unit tests without
 /// touching real per-user/per-machine directories.
 /// </summary>
-public sealed class ConfigService
+public sealed class ConfigService : IDisposable
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -18,6 +18,7 @@ public sealed class ConfigService
     };
 
     private readonly string _filePath;
+    private readonly SemaphoreSlim _updateLock = new(1, 1);
 
     public ConfigService(string filePath)
     {
@@ -53,6 +54,30 @@ public sealed class ConfigService
         File.Move(tempPath, _filePath, overwrite: true);
     }
 
+    /// <summary>
+    /// Load, transform, save as one step, serialized against every other
+    /// UpdateAsync on this instance - so two editors (say, a layout save and
+    /// an integration save from the web UI) can't each load the same old
+    /// config and have the second save silently revert the first. Returns
+    /// the config as saved. Plain LoadAsync/SaveAsync callers aren't covered.
+    /// </summary>
+    public async Task<AppConfig> UpdateAsync(Func<AppConfig, AppConfig> update, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+
+        await _updateLock.WaitAsync(cancellationToken);
+        try
+        {
+            var updated = update(await LoadAsync(cancellationToken));
+            await SaveAsync(updated, cancellationToken);
+            return updated;
+        }
+        finally
+        {
+            _updateLock.Release();
+        }
+    }
+
     /// <summary>Default per-machine config location used by the composition root (App project).</summary>
     public static string GetDefaultConfigPath()
     {
@@ -66,4 +91,6 @@ public sealed class ConfigService
         var baseDirectory = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
         return Path.Combine(baseDirectory, "Ax206Display", "secrets.dat");
     }
+
+    public void Dispose() => _updateLock.Dispose();
 }

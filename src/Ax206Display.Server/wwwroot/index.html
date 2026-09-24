@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>AX206 Display</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div id="login" class="login" hidden>
+    <form id="login-form" class="login-card">
+      <img src="icon.svg" alt="" width="40" height="40">
+      <h1>AX206 Display</h1>
+      <p class="muted">Sign in to manage your screens.</p>
+      <label>Password
+        <input id="login-password" type="password" autocomplete="current-password" required autofocus>
+      </label>
+      <button type="submit" class="primary">Sign in</button>
+      <p id="login-error" class="error" role="alert"></p>
+      <details class="hint">
+        <summary>First time here?</summary>
+        <p>The first start wrote a random password to <code>initial-password.txt</code> in the data directory
+          (<code>/var/lib/ax206display</code> for the packaged service). Read it on the Pi with
+          <code>sudo cat /var/lib/ax206display/initial-password.txt</code>.
+          Forgot a password you set? Run <code>sudo ax206display-passwd</code>.</p>
+      </details>
+    </form>
+  </div>
+
+  <div id="app" class="app" hidden>
+    <header class="topbar">
+      <div class="brand"><img src="icon.svg" alt="" width="24" height="24"><span>AX206 Display</span><span id="host-name" class="muted"></span></div>
+      <nav class="tabs" aria-label="Sections">
+        <button type="button" data-view="displays" class="tab active">Displays</button>
+        <button type="button" data-view="integrations" class="tab">Integrations</button>
+        <button type="button" data-view="settings" class="tab">Settings</button>
+      </nav>
+      <button type="button" id="logout" class="ghost">Sign out</button>
+    </header>
+
+    <main>
+      <section id="view-displays" class="view displays">
+        <aside class="device-list">
+          <div class="panel-head">
+            <h2>Displays</h2>
+            <button type="button" id="scan" class="ghost small" title="Look for newly plugged-in displays">Scan USB</button>
+          </div>
+          <ul id="devices"></ul>
+          <p id="no-devices" class="empty" hidden>No displays yet. Plug one in and press <b>Scan USB</b>.</p>
+        </aside>
+
+        <section class="editor" id="editor" hidden>
+          <div class="toolbar">
+            <div class="add-buttons" id="add-buttons"></div>
+            <div class="spacer"></div>
+            <span id="dirty" class="dirty" hidden>Unsaved changes</span>
+            <button type="button" id="revert" class="ghost">Revert</button>
+            <button type="button" id="save" class="primary">Save to display</button>
+          </div>
+          <div class="stage-wrap" id="stage-wrap">
+            <div class="stage" id="stage" tabindex="0" aria-label="Layout canvas. Arrow keys move the selected widget.">
+              <img id="preview" alt="Live preview of the display">
+              <div id="overlays" class="overlays"></div>
+            </div>
+          </div>
+          <p class="muted small stage-hint">Drag to move, drag the corner to resize. Arrow keys nudge (Shift for 10 px). Hold Alt to turn off snapping.</p>
+        </section>
+
+        <aside class="inspector" id="inspector" hidden>
+          <div id="widget-panel"></div>
+          <div id="device-panel"></div>
+        </aside>
+      </section>
+
+      <section id="view-integrations" class="view narrow" hidden>
+        <h2>Integrations</h2>
+        <p class="muted">Each one is tested live before it's saved. Passwords are stored encrypted on the Pi and never sent back to the browser; leave a password field blank to keep the saved one.</p>
+        <div id="integrations" class="cards"></div>
+      </section>
+
+      <section id="view-settings" class="view narrow" hidden>
+        <h2>Settings</h2>
+        <form id="password-form" class="card">
+          <h3>Change web password</h3>
+          <label>Current password <input type="password" name="currentPassword" autocomplete="current-password" required></label>
+          <label>New password <input type="password" name="newPassword" autocomplete="new-password" minlength="8" required></label>
+          <label>Repeat new password <input type="password" name="repeatPassword" autocomplete="new-password" minlength="8" required></label>
+          <div class="row"><button type="submit" class="primary">Change password</button><span class="status" role="status"></span></div>
+          <p class="muted small">Changing it signs out every other browser.</p>
+        </form>
+        <div class="card">
+          <h3>About this install</h3>
+          <dl id="about" class="about"></dl>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
