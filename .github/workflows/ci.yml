@@ -27,7 +27,8 @@ jobs:
 
       # The WPF app (Ax206Display.App) can only be restored/built on Windows,
       # so this job targets a solution filter with everything except it:
-      # Protocol/Transport/Rendering/DataSources/Config + the test project.
+      # Protocol/Transport/Rendering/DataSources/Config/Engine, the Linux
+      # server (Ax206Display.Server) and the test project.
       #
       # --locked-mode fails the restore outright if the resolved dependency
       # graph (including transitive packages) drifts from the committed
@@ -62,6 +63,8 @@ jobs:
             src/Ax206Display.Rendering/Ax206Display.Rendering.csproj \
             src/Ax206Display.DataSources/Ax206Display.DataSources.csproj \
             src/Ax206Display.Config/Ax206Display.Config.csproj \
+            src/Ax206Display.Engine/Ax206Display.Engine.csproj \
+            src/Ax206Display.Server/Ax206Display.Server.csproj \
             tests/Ax206Display.Tests/Ax206Display.Tests.csproj; do
             dotnet list "$project" package --vulnerable --include-transitive | tee /tmp/vuln-check.txt
             if grep -q "has the following vulnerable packages" /tmp/vuln-check.txt; then
@@ -69,6 +72,16 @@ jobs:
               exit 1
             fi
           done
+
+      # Catches a broken self-contained publish (missing native assets, a
+      # packaging script typo) before it can only surface at release time.
+      # arm64 because that's what a Raspberry Pi runs.
+      - name: Publish Linux arm64 release (smoke)
+        run: |
+          packaging/linux/build-release.sh linux-arm64 0.0.0-ci artifacts
+          tar -tzf artifacts/ax206display-0.0.0-ci-linux-arm64.tar.gz | grep -q '/app/ax206display$'
+          tar -tzf artifacts/ax206display-0.0.0-ci-linux-arm64.tar.gz | grep -q '/app/wwwroot/index.html$'
+          tar -tzf artifacts/ax206display-0.0.0-ci-linux-arm64.tar.gz | grep -q '/install.sh$'
 
   windows-build:
     name: Windows (build WPF app)

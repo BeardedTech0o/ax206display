@@ -1,0 +1,8 @@
+#!/bin/sh
+# Reset the ax206display web UI password. Runs the server's set-password
+# command as the service account so the password file keeps its ownership.
+set -e
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$0" "$@"
+fi
+exec runuser -u ax206display -- env AX206_DATA_DIR=/var/lib/ax206display /opt/ax206display/ax206display set-password

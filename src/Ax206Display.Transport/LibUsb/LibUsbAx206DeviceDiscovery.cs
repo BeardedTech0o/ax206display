@@ -1,3 +1,4 @@
+using Ax206Display.Protocol.Discovery;
 using Ax206Display.Transport.Discovery;
 using LibUsbDotNet.Info;
 using LibUsbDotNet.LibUsb;
@@ -131,7 +132,15 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
     {
         try
         {
-            if (!device.TryOpen() || !device.ClaimInterface(0))
+            if (!device.TryOpen())
+            {
+                LogSkippedUnclaimable(device.Info.VendorId, device.Info.ProductId);
+                return null;
+            }
+
+            EnableKernelDriverAutoDetach(device);
+
+            if (!device.ClaimInterface(0))
             {
                 LogSkippedUnclaimable(device.Info.VendorId, device.Info.ProductId);
                 SafeClose(device);
@@ -167,6 +176,46 @@ public sealed partial class LibUsbAx206DeviceDiscovery : IAx206DeviceDiscovery, 
             return null;
         }
     }
+
+    /// <summary>
+    /// On Linux the kernel's usb-storage driver binds to an AX206 panel the
+    /// moment it's plugged in (the firmware presents itself as a SCSI mass
+    /// storage device), and a claim then fails with LIBUSB_ERROR_BUSY. libusb
+    /// can detach that driver for the duration of the claim, but this is only
+    /// ever done for the documented AX206 runtime VID/PID: discovery probes
+    /// every USB device, and detaching drivers from arbitrary ones would take
+    /// a Pi's USB boot drive, keyboard or USB-attached Ethernet offline.
+    /// Rebadged panels with a different VID/PID still work when no kernel
+    /// driver holds them (e.g. with the packaged udev rule unbinding it).
+    /// </summary>
+    private void EnableKernelDriverAutoDetach(IUsbDevice device)
+    {
+        if (!OperatingSystem.IsLinux() || device is not UsbDevice usbDevice)
+        {
+            return;
+        }
+
+        var isKnownDisplay = KnownUsbIdentifiers.RuntimeDisplays.Any(
+            id => id.VendorId == device.Info.VendorId && id.ProductId == device.Info.ProductId);
+        if (!isKnownDisplay)
+        {
+            return;
+        }
+
+        try
+        {
+            usbDevice.SetAutoDetachKernelDriver(true);
+        }
+        catch (Exception ex)
+        {
+            // Not fatal: ClaimInterface below reports the real outcome, and
+            // a panel with no kernel driver bound never needed this anyway.
+            LogAutoDetachFailed(ex, device.Info.VendorId, device.Info.ProductId);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not enable kernel driver auto-detach for USB device {VendorId:X4}:{ProductId:X4}.")]
+    private partial void LogAutoDetachFailed(Exception exception, ushort vendorId, ushort productId);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Skipping USB device {VendorId:X4}:{ProductId:X4} - could not open or claim interface 0.")]
     private partial void LogSkippedUnclaimable(ushort vendorId, ushort productId);

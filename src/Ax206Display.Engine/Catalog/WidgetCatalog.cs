@@ -1,20 +1,22 @@
 using Ax206Display.DataSources.Network;
 using Ax206Display.DataSources.PiHole;
+using Ax206Display.DataSources.Proxmox;
 using Ax206Display.DataSources.SystemMonitor;
 using Ax206Display.DataSources.UniFi;
 using Ax206Display.Rendering.Widgets;
 
-namespace Ax206Display.App.Views.Designer;
+namespace Ax206Display.Engine.Catalog;
 
 /// <summary>
-/// Everything the Widget Designer's UI needs to offer choices without the
-/// user typing a widget type, data key, or color by hand.
+/// Everything a layout editor (the WPF Widget Designer, the web UI) needs to
+/// offer choices without the user typing a widget type, data key, or color
+/// by hand.
 /// </summary>
-internal static class WidgetCatalog
+public static class WidgetCatalog
 {
-    internal sealed record WidgetTypeDescriptor(string Type, string DisplayName);
+    public sealed record WidgetTypeDescriptor(string Type, string DisplayName);
 
-    internal static readonly IReadOnlyList<WidgetTypeDescriptor> Types =
+    public static readonly IReadOnlyList<WidgetTypeDescriptor> Types =
     [
         new("clock", "Clock"),
         new("text", "Text Label"),
@@ -22,15 +24,15 @@ internal static class WidgetCatalog
         new("gauge", "Gauge"),
     ];
 
-    internal const string CategoryLocalDevice = "Local Device";
-    internal const string CategoryNetwork = "Network";
-    internal const string CategoryPiHole = "Pi-hole";
-    internal const string CategoryUniFi = "UniFi";
-    internal const string CategoryProxmox = "Proxmox";
+    public const string CategoryLocalDevice = "Local Device";
+    public const string CategoryNetwork = "Network";
+    public const string CategoryPiHole = "Pi-hole";
+    public const string CategoryUniFi = "UniFi";
+    public const string CategoryProxmox = "Proxmox";
 
-    internal sealed record StatKeyDescriptor(string Key, string Category, string DisplayName, string DefaultLabel, string DefaultUnit);
+    public sealed record StatKeyDescriptor(string Key, string Category, string DisplayName, string DefaultLabel, string DefaultUnit);
 
-    internal static readonly IReadOnlyList<StatKeyDescriptor> StatKeys =
+    public static readonly IReadOnlyList<StatKeyDescriptor> StatKeys =
     [
         new(SystemStatKeys.CpuLoadPercent, CategoryLocalDevice, "CPU Load", "CPU", "%"),
         new(SystemStatKeys.CpuTemperatureCelsius, CategoryLocalDevice, "CPU Temperature", "CPU", "°C"),
@@ -55,9 +57,9 @@ internal static class WidgetCatalog
         new(UniFiStatKeys.WanUploadMbps, CategoryUniFi, "WAN Upload", "Up", " Mbps"),
     ];
 
-    internal sealed record ColorSwatch(string Name, string Hex);
+    public sealed record ColorSwatch(string Name, string Hex);
 
-    internal static readonly IReadOnlyList<ColorSwatch> Colors =
+    public static readonly IReadOnlyList<ColorSwatch> Colors =
     [
         new("White", "#FFFFFF"),
         new("Silver", "#C7C7CC"),
@@ -78,9 +80,9 @@ internal static class WidgetCatalog
         new("Gray", "#8E8E93"),
     ];
 
-    internal const string DefaultFontLabel = "Default";
+    public const string DefaultFontLabel = "Default";
 
-    internal static readonly IReadOnlyList<string> FontFamilies =
+    public static readonly IReadOnlyList<string> FontFamilies =
     [
         DefaultFontLabel,
         "Segoe UI",
@@ -97,9 +99,9 @@ internal static class WidgetCatalog
     ];
 
     /// <summary>Pixels = null is "Auto": fit the text to the widget's box, the historical behavior.</summary>
-    internal sealed record FontSizeOption(string DisplayName, double? Pixels);
+    public sealed record FontSizeOption(string DisplayName, double? Pixels);
 
-    internal static readonly IReadOnlyList<FontSizeOption> FontSizes = BuildFontSizes();
+    public static readonly IReadOnlyList<FontSizeOption> FontSizes = BuildFontSizes();
 
     private static List<FontSizeOption> BuildFontSizes()
     {
@@ -112,9 +114,64 @@ internal static class WidgetCatalog
         return options;
     }
 
-    internal const string DefaultTimeFormat = "HH:mm:ss";
+    /// <summary>
+    /// The fixed system/network/integration keys plus one entry per
+    /// currently-known Proxmox node (CPU/memory/uptime) and guest
+    /// (CPU/memory) - read from ProxmoxNodeDirectory/ProxmoxGuestDirectory,
+    /// plain in-memory snapshots the pump service keeps current, so listing
+    /// them never makes a network call of its own.
+    /// </summary>
+    public static List<StatKeyDescriptor> BuildAvailableStatKeys(ProxmoxNodeDirectory nodeDirectory, ProxmoxGuestDirectory guestDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(nodeDirectory);
+        ArgumentNullException.ThrowIfNull(guestDirectory);
 
-    internal static readonly IReadOnlyList<string> TimeFormats =
+        var keys = new List<StatKeyDescriptor>(StatKeys);
+
+        foreach (var node in nodeDirectory.GetSnapshot())
+        {
+            keys.Add(new StatKeyDescriptor(
+                ProxmoxNodeKeys.CpuUsedPercent(node.Node),
+                CategoryProxmox,
+                $"{node.Node} CPU",
+                node.Node,
+                "%"));
+            keys.Add(new StatKeyDescriptor(
+                ProxmoxNodeKeys.MemoryUsedPercent(node.Node),
+                CategoryProxmox,
+                $"{node.Node} Memory",
+                node.Node,
+                "%"));
+            keys.Add(new StatKeyDescriptor(
+                ProxmoxNodeKeys.UptimeDays(node.Node),
+                CategoryProxmox,
+                $"{node.Node} Uptime",
+                node.Node,
+                " days"));
+        }
+
+        foreach (var guest in guestDirectory.GetSnapshot())
+        {
+            keys.Add(new StatKeyDescriptor(
+                ProxmoxGuestKeys.CpuUsedPercent(guest.VmId),
+                CategoryProxmox,
+                $"{guest.Name} CPU",
+                guest.Name,
+                "%"));
+            keys.Add(new StatKeyDescriptor(
+                ProxmoxGuestKeys.MemoryUsedPercent(guest.VmId),
+                CategoryProxmox,
+                $"{guest.Name} Memory",
+                guest.Name,
+                "%"));
+        }
+
+        return keys;
+    }
+
+    public const string DefaultTimeFormat = "HH:mm:ss";
+
+    public static readonly IReadOnlyList<string> TimeFormats =
     [
         "HH:mm:ss",
         "HH:mm",
@@ -122,7 +179,7 @@ internal static class WidgetCatalog
         "hh:mm:ss tt",
     ];
 
-    internal static WidgetDesignItem CreateDefault(string type, int canvasWidth, int canvasHeight, int nextZOrder)
+    public static WidgetDesignItem CreateDefault(string type, int canvasWidth, int canvasHeight, int nextZOrder)
     {
         int width, height;
         if (type == "gauge")

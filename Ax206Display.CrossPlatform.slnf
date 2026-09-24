@@ -7,6 +7,8 @@
       "src/Ax206Display.Rendering/Ax206Display.Rendering.csproj",
       "src/Ax206Display.DataSources/Ax206Display.DataSources.csproj",
       "src/Ax206Display.Config/Ax206Display.Config.csproj",
+      "src/Ax206Display.Engine/Ax206Display.Engine.csproj",
+      "src/Ax206Display.Server/Ax206Display.Server.csproj",
       "tests/Ax206Display.Tests/Ax206Display.Tests.csproj"
     ]
   }

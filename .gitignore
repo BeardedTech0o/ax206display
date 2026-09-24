@@ -24,6 +24,8 @@ Thumbs.db
 
 ## Publish output
 publish/
+# Linux release tarballs from packaging/linux/build-release.sh
+artifacts/
 *.pubxml.user
 
 ## WiX (installer/) - local `wix extension add` cache; the SDK-style build

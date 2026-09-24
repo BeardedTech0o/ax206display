@@ -2,36 +2,39 @@ using Ax206Display.Config.Models;
 using Ax206Display.Config.Secrets;
 using Ax206Display.Config.Services;
 using Ax206Display.DataSources.Http;
-using Ax206Display.DataSources.PiHole;
+using Ax206Display.DataSources.UniFi;
 using Ax206Display.Rendering.Playback;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Ax206Display.App.Services;
+namespace Ax206Display.Engine.Services;
 
 /// <summary>
-/// Polls a configured Pi-hole integration (Kind == "pihole" in
-/// AppConfig.Integrations) and publishes its summary stats into the
-/// RenderDataHub. Pi-hole v6 replaced v5's stateless per-request API token
-/// with a session login (an "app password" traded for a session id), so
-/// this logs in once and reuses that session, re-authenticating
-/// automatically if a poll fails (e.g. the session expired) - same shape as
-/// ProxmoxPumpService/UniFiPumpService. Idles quietly if not configured yet.
+/// Polls a configured UniFi integration (Kind == "unifi" in
+/// AppConfig.Integrations) and publishes connected client count and WAN
+/// throughput into the RenderDataHub. Idles quietly (checking again next
+/// poll) if no UniFi integration is configured yet, and re-authenticates
+/// automatically if a poll fails (e.g. the session cookie/CSRF token expired).
 /// </summary>
-public sealed partial class PiHolePumpService : BackgroundService
+public sealed partial class UniFiPumpService : BackgroundService
 {
-    private const string IntegrationKind = "pihole";
+    private const string IntegrationKind = "unifi";
+    private const string DefaultSite = "default";
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(10);
 
     private readonly ConfigService _configService;
     private readonly SecretStore _secretStore;
     private readonly RenderDataHub _hub;
-    private readonly ILogger<PiHolePumpService> _logger;
+    private readonly ILogger<UniFiPumpService> _logger;
 
-    private IPiHoleClient? _client;
+    private IUniFiClient? _client;
     private string? _loggedInIntegrationId;
 
-    public PiHolePumpService(ConfigService configService, SecretStore secretStore, RenderDataHub hub, ILogger<PiHolePumpService> logger)
+    public UniFiPumpService(
+        ConfigService configService,
+        SecretStore secretStore,
+        RenderDataHub hub,
+        ILogger<UniFiPumpService> logger)
     {
         _configService = configService;
         _secretStore = secretStore;
@@ -53,7 +56,7 @@ public sealed partial class PiHolePumpService : BackgroundService
             {
                 LogPollFailed(ex);
                 // Force a fresh login attempt next time - the failure may
-                // have been an expired/rejected session id.
+                // have been an expired session cookie/CSRF token.
                 _client = null;
                 _loggedInIntegrationId = null;
             }
@@ -91,35 +94,39 @@ public sealed partial class PiHolePumpService : BackgroundService
             }
         }
 
-        var summary = await _client.GetSummaryAsync(cancellationToken);
-        PiHoleStatsPublisher.Publish(summary, _hub.Publish);
+        var status = await _client.GetSiteHealthAsync(integration.Site ?? DefaultSite, cancellationToken);
+        UniFiStatsPublisher.Publish(status, _hub.Publish);
     }
 
-    private async Task<IPiHoleClient?> LogInAsync(IntegrationConfig integration, CancellationToken cancellationToken)
+    private async Task<IUniFiClient?> LogInAsync(IntegrationConfig integration, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(integration.SecretKey))
+        if (string.IsNullOrEmpty(integration.Username) || string.IsNullOrEmpty(integration.SecretKey))
         {
             LogMissingCredentials(integration.Id);
             return null;
         }
 
         await _secretStore.LoadAsync(cancellationToken);
-        var appPassword = _secretStore.GetSecret(integration.SecretKey);
-        if (string.IsNullOrEmpty(appPassword))
+        var password = _secretStore.GetSecret(integration.SecretKey);
+        if (string.IsNullOrEmpty(password))
         {
             LogMissingCredentials(integration.Id);
             return null;
         }
 
-        var httpClient = IntegrationHttpClientFactory.Create(integration, enableCookies: false);
-        var client = new PiHoleClient(httpClient);
-        await client.LoginAsync(appPassword, cancellationToken);
+        // Null for the common case of an account with no 2FA - see
+        // IntegrationConfig.TotpSecretKey.
+        var totpSecret = integration.TotpSecretKey is { } totpSecretKey ? _secretStore.GetSecret(totpSecretKey) : null;
+
+        var httpClient = IntegrationHttpClientFactory.Create(integration, enableCookies: true);
+        var client = new UniFiClient(httpClient);
+        await client.LoginAsync(integration.Username, password, totpSecret, cancellationToken);
         return client;
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Pi-hole poll failed; will retry.")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "UniFi poll failed; will retry.")]
     private partial void LogPollFailed(Exception exception);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Pi-hole integration {IntegrationId} is missing its app password; skipping.")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "UniFi integration {IntegrationId} is missing a username or password; skipping.")]
     private partial void LogMissingCredentials(string integrationId);
 }

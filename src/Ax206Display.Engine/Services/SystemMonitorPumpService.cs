@@ -1,25 +1,25 @@
-using Ax206Display.DataSources.Network;
+using Ax206Display.DataSources.SystemMonitor;
 using Ax206Display.Rendering.Playback;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Ax206Display.App.Services;
+namespace Ax206Display.Engine.Services;
 
 /// <summary>
-/// Polls the network speed source on a fixed interval and publishes the
+/// Polls the system-monitor source on a fixed interval and publishes the
 /// readings into the <see cref="RenderDataHub"/> for stat widgets to render.
-/// Poll failures are logged and skipped - one bad read must never take down
-/// the host.
+/// Poll failures are logged and skipped - one bad sensor read must never take
+/// down the host.
 /// </summary>
-public sealed partial class NetworkSpeedPumpService : BackgroundService
+public sealed partial class SystemMonitorPumpService : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
 
-    private readonly INetworkSpeedSource _source;
+    private readonly ISystemMonitorSource _source;
     private readonly RenderDataHub _hub;
-    private readonly ILogger<NetworkSpeedPumpService> _logger;
+    private readonly ILogger<SystemMonitorPumpService> _logger;
 
-    public NetworkSpeedPumpService(INetworkSpeedSource source, RenderDataHub hub, ILogger<NetworkSpeedPumpService> logger)
+    public SystemMonitorPumpService(ISystemMonitorSource source, RenderDataHub hub, ILogger<SystemMonitorPumpService> logger)
     {
         _source = source;
         _hub = hub;
@@ -28,8 +28,8 @@ public sealed partial class NetworkSpeedPumpService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Hop off the host's startup path immediately - the first read
-        // establishes the baseline counters and reports no rate yet.
+        // Hop off the host's startup path immediately - sensor polling is
+        // synchronous and the first read can be slow.
         await Task.Yield();
 
         while (!stoppingToken.IsCancellationRequested)
@@ -37,7 +37,7 @@ public sealed partial class NetworkSpeedPumpService : BackgroundService
             try
             {
                 var snapshot = _source.GetSnapshot();
-                NetworkSpeedPublisher.Publish(snapshot, _hub.Publish, _hub.Remove);
+                SystemStatsPublisher.Publish(snapshot, _hub.Publish, _hub.Remove);
             }
             catch (Exception ex)
             {
@@ -55,6 +55,6 @@ public sealed partial class NetworkSpeedPumpService : BackgroundService
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Network speed poll failed; keeping previous readings.")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "System monitor poll failed; keeping previous readings.")]
     private partial void LogPollFailed(Exception exception);
 }
