@@ -86,6 +86,7 @@ public sealed partial class DeviceDisplayLoop
             {
                 Now = DateTimeOffset.Now,
                 Data = _dataProvider?.GetSnapshot() ?? EmptyData,
+                DataProvider = _dataProvider,
             };
 
             using (var frame = compositor.ComposeFrame(Volatile.Read(ref _placements), context, Volatile.Read(ref _backgroundImage)))

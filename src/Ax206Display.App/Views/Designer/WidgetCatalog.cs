@@ -20,6 +20,7 @@ internal static class WidgetCatalog
         new("text", "Text Label"),
         new("stat", "System Stat"),
         new("gauge", "Gauge"),
+        new("chart", "Line Chart"),
     ];
 
     internal const string CategoryLocalDevice = "Local Device";
@@ -134,6 +135,14 @@ internal static class WidgetCatalog
             width = side;
             height = side;
         }
+        else if (type == "chart")
+        {
+            // A line chart needs width to actually show a trend - the
+            // default third-of-canvas width every other widget starts at
+            // would barely fit a handful of points.
+            width = Math.Clamp(canvasWidth * 2 / 3, 20, canvasWidth);
+            height = Math.Clamp(canvasHeight / 3, 15, canvasHeight);
+        }
         else
         {
             width = Math.Clamp(canvasWidth / 3, 20, canvasWidth);
@@ -158,6 +167,7 @@ internal static class WidgetCatalog
         {
             case "stat":
             case "gauge":
+            case "chart":
                 var defaultStat = StatKeys[0];
                 item.SetSetting("dataKey", defaultStat.Key);
                 item.SetSetting("label", defaultStat.DefaultLabel);

@@ -20,6 +20,7 @@ public static class WidgetFactory
             "text" => CreateText(config),
             "stat" => CreateStat(config),
             "gauge" => CreateGauge(config),
+            "chart" => CreateChart(config),
             _ => throw new NotSupportedException($"Unknown widget type '{config.Type}' (widget id '{config.Id}')."),
         };
     }
@@ -74,6 +75,32 @@ public static class WidgetFactory
             valueFontSizePx,
             labelGapPx,
             ReadColor(config, "gaugeColor"),
+            ReadTextColor(config),
+            ReadFontStyle(config));
+    }
+
+    private static ChartWidget CreateChart(WidgetConfig config)
+    {
+        var dataKey = config.Settings["dataKey"]?.GetValue<string>()
+            ?? throw new InvalidOperationException($"Chart widget '{config.Id}' is missing the required 'dataKey' setting.");
+
+        var label = config.Settings["label"]?.GetValue<string>() ?? string.Empty;
+        var unit = config.Settings["unit"]?.GetValue<string>() ?? string.Empty;
+        var decimals = config.Settings["decimals"]?.GetValue<int>() ?? 1;
+        var windowMinutes = ReadDouble(config.Settings["windowMinutes"]) ?? 60;
+        var showArea = config.Settings["showArea"]?.GetValue<bool>() ?? true;
+
+        return new ChartWidget(
+            config.Id,
+            config.Width,
+            config.Height,
+            dataKey,
+            label,
+            unit,
+            decimals,
+            TimeSpan.FromMinutes(Math.Max(1, windowMinutes)),
+            showArea,
+            ReadColor(config, "lineColor"),
             ReadTextColor(config),
             ReadFontStyle(config));
     }

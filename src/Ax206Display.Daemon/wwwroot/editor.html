@@ -131,6 +131,7 @@
         <option value="text">Text Label</option>
         <option value="stat">System Stat</option>
         <option value="gauge">Gauge</option>
+        <option value="chart">Line Chart</option>
       </select>
       <button id="addButton">Add Widget</button>
       <button id="deleteButton" class="danger" disabled>Delete Selected</button>
@@ -316,7 +317,7 @@
         </div>`;
     } else if (w.type === 'text') {
       typeFields = `<div class="field"><label>Text</label><input type="text" data-setting="text" value="${escapeAttr(w.settings.text || '')}" /></div>`;
-    } else if (w.type === 'stat' || w.type === 'gauge') {
+    } else if (w.type === 'stat' || w.type === 'gauge' || w.type === 'chart') {
       typeFields = `
         <div class="field"><label>Data source</label>
           <select data-setting="dataKey">${STAT_KEYS.map(([k, label]) => `<option value="${k}" ${w.settings.dataKey === k ? 'selected' : ''}>${label}</option>`).join('')}</select>
@@ -333,6 +334,11 @@
           <div class="field"><label>Max value</label><input type="number" data-setting-num="maxValue" value="${w.settings.maxValue ?? 100}" /></div>
         </div>
         <div class="field"><label>Gauge color (hex)</label><input type="text" data-setting="gaugeColor" value="${escapeAttr(w.settings.gaugeColor || '')}" placeholder="#5B9DFD" /></div>`;
+      } else if (w.type === 'chart') {
+        typeFields += `
+        <div class="field"><label>Time window (minutes)</label><input type="number" min="1" data-setting-num="windowMinutes" value="${w.settings.windowMinutes ?? 60}" /></div>
+        <div class="field"><label>Line color (hex)</label><input type="text" data-setting="lineColor" value="${escapeAttr(w.settings.lineColor || '')}" placeholder="#5B9DFD" /></div>
+        <div class="checkbox-row"><input type="checkbox" id="fieldShowArea" ${w.settings.showArea !== false ? 'checked' : ''} /> <label for="fieldShowArea" style="margin:0;">Fill area under line</label></div>`;
       }
     }
 
@@ -379,6 +385,7 @@
     document.getElementById('fieldZ').addEventListener('change', e => { w.zOrder = parseInt(e.target.value, 10) || 0; saveWidgets(); });
     document.getElementById('fieldBold').addEventListener('change', e => { w.settings.bold = e.target.checked; saveWidgets(); });
     document.getElementById('fieldItalic').addEventListener('change', e => { w.settings.italic = e.target.checked; saveWidgets(); });
+    document.getElementById('fieldShowArea')?.addEventListener('change', e => { w.settings.showArea = e.target.checked; saveWidgets(); });
 
     container.querySelectorAll('[data-setting]').forEach(el => {
       el.addEventListener('change', e => {
@@ -422,8 +429,12 @@
 
   document.getElementById('addButton').addEventListener('click', () => {
     const type = document.getElementById('addType').value;
-    const width = type === 'gauge' ? Math.round(device.screenWidth / 3) : Math.round(device.screenWidth / 3);
-    const height = type === 'gauge' ? width : Math.round(device.screenHeight / 4);
+    // A chart needs width to actually show a trend - the default
+    // third-of-canvas every other widget starts at would barely fit a
+    // handful of points (matches WidgetCatalog.CreateDefault on the Windows
+    // side).
+    const width = type === 'chart' ? Math.round(device.screenWidth * 2 / 3) : Math.round(device.screenWidth / 3);
+    const height = type === 'gauge' ? width : Math.round(device.screenHeight / (type === 'chart' ? 3 : 4));
     const widget = {
       id: `${type}-${Math.random().toString(36).slice(2, 10)}`,
       type,
@@ -431,7 +442,7 @@
       y: Math.max(0, Math.round((device.screenHeight - height) / 2)),
       width, height,
       zOrder: nextZOrder++,
-      settings: type === 'stat' || type === 'gauge' ? { dataKey: STAT_KEYS[0][0], label: 'CPU', unit: '%' } : (type === 'text' ? { text: 'Label' } : {}),
+      settings: type === 'stat' || type === 'gauge' || type === 'chart' ? { dataKey: STAT_KEYS[0][0], label: 'CPU', unit: '%' } : (type === 'text' ? { text: 'Label' } : {}),
     };
     widgets.push(widget);
     selectWidget(widget.id);

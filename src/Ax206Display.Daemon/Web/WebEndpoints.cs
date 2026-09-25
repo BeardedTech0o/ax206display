@@ -200,7 +200,7 @@ public static partial class WebEndpoints
         using var backgroundImage = LoadBackgroundImage(device.BackgroundImagePath, logger);
 
         var compositor = new FrameCompositor(device.ScreenWidth, device.ScreenHeight);
-        var context = new WidgetRenderContext { Now = DateTimeOffset.Now, Data = dataProvider.GetSnapshot() };
+        var context = new WidgetRenderContext { Now = DateTimeOffset.Now, Data = dataProvider.GetSnapshot(), DataProvider = dataProvider };
 
         using var frame = compositor.ComposeFrame(placements, context, backgroundImage);
         using var image = SKImage.FromBitmap(frame);
