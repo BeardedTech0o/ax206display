@@ -1,20 +1,35 @@
 namespace Ax206Display.DataSources.Proxmox;
 
 /// <summary>
-/// The last-known list of Proxmox nodes, updated by whatever polls the
-/// Proxmox API and read by the Widget Designer to populate its "Reading"
-/// dropdown - see <see cref="ProxmoxGuestDirectory"/> for the identical
-/// pattern this mirrors at the node (rather than guest) level.
-/// Copy-on-write: readers get an immutable snapshot with no lock needed.
+/// The last-known list of nodes per configured Proxmox host - the node-level
+/// counterpart to <see cref="ProxmoxGuestDirectory"/>, which its own doc
+/// comment explains in full (identical shape/reasoning, node names instead
+/// of VMIDs).
 /// </summary>
 public sealed class ProxmoxNodeDirectory
 {
-    private IReadOnlyList<ProxmoxNodeStatus> _nodes = [];
+    private Dictionary<string, ProxmoxHostSnapshot<ProxmoxNodeStatus>> _byHost = [];
 
-    public IReadOnlyList<ProxmoxNodeStatus> GetSnapshot() => _nodes;
+    public IReadOnlyDictionary<string, ProxmoxHostSnapshot<ProxmoxNodeStatus>> GetSnapshot() => _byHost;
 
-    public void Update(IReadOnlyList<ProxmoxNodeStatus> nodes)
+    public void Update(string hostId, string displayName, IReadOnlyList<ProxmoxNodeStatus> nodes)
     {
-        _nodes = nodes;
+        var next = new Dictionary<string, ProxmoxHostSnapshot<ProxmoxNodeStatus>>(_byHost)
+        {
+            [hostId] = new ProxmoxHostSnapshot<ProxmoxNodeStatus>(hostId, displayName, nodes),
+        };
+        _byHost = next;
+    }
+
+    public void RemoveHost(string hostId)
+    {
+        if (!_byHost.ContainsKey(hostId))
+        {
+            return;
+        }
+
+        var next = new Dictionary<string, ProxmoxHostSnapshot<ProxmoxNodeStatus>>(_byHost);
+        next.Remove(hostId);
+        _byHost = next;
     }
 }

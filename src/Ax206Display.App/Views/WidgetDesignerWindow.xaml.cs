@@ -839,42 +839,54 @@ public partial class WidgetDesignerWindow : Window
     {
         var keys = new List<WidgetCatalog.StatKeyDescriptor>(WidgetCatalog.StatKeys);
 
-        foreach (var node in _proxmoxNodeDirectory.GetSnapshot())
+        // Keyed by host (IntegrationConfig.Id) rather than a flat list -
+        // more than one Proxmox host can be configured, and a node name or
+        // VMID is only unique within one host/cluster, not across several -
+        // see ProxmoxGuestKeys/ProxmoxNodeKeys. The host's display name
+        // prefixes every reading so two hosts' identically-named nodes (e.g.
+        // both just called "pve") are still distinguishable in the dropdown.
+        foreach (var hostSnapshot in _proxmoxNodeDirectory.GetSnapshot().Values)
         {
-            keys.Add(new WidgetCatalog.StatKeyDescriptor(
-                ProxmoxNodeKeys.CpuUsedPercent(node.Node),
-                WidgetCatalog.CategoryProxmox,
-                $"{node.Node} CPU",
-                node.Node,
-                "%"));
-            keys.Add(new WidgetCatalog.StatKeyDescriptor(
-                ProxmoxNodeKeys.MemoryUsedPercent(node.Node),
-                WidgetCatalog.CategoryProxmox,
-                $"{node.Node} Memory",
-                node.Node,
-                "%"));
-            keys.Add(new WidgetCatalog.StatKeyDescriptor(
-                ProxmoxNodeKeys.UptimeDays(node.Node),
-                WidgetCatalog.CategoryProxmox,
-                $"{node.Node} Uptime",
-                node.Node,
-                " days"));
+            foreach (var node in hostSnapshot.Items)
+            {
+                keys.Add(new WidgetCatalog.StatKeyDescriptor(
+                    ProxmoxNodeKeys.CpuUsedPercent(hostSnapshot.HostId, node.Node),
+                    WidgetCatalog.CategoryProxmox,
+                    $"{hostSnapshot.DisplayName}: {node.Node} CPU",
+                    node.Node,
+                    "%"));
+                keys.Add(new WidgetCatalog.StatKeyDescriptor(
+                    ProxmoxNodeKeys.MemoryUsedPercent(hostSnapshot.HostId, node.Node),
+                    WidgetCatalog.CategoryProxmox,
+                    $"{hostSnapshot.DisplayName}: {node.Node} Memory",
+                    node.Node,
+                    "%"));
+                keys.Add(new WidgetCatalog.StatKeyDescriptor(
+                    ProxmoxNodeKeys.UptimeDays(hostSnapshot.HostId, node.Node),
+                    WidgetCatalog.CategoryProxmox,
+                    $"{hostSnapshot.DisplayName}: {node.Node} Uptime",
+                    node.Node,
+                    " days"));
+            }
         }
 
-        foreach (var guest in _proxmoxGuestDirectory.GetSnapshot())
+        foreach (var hostSnapshot in _proxmoxGuestDirectory.GetSnapshot().Values)
         {
-            keys.Add(new WidgetCatalog.StatKeyDescriptor(
-                ProxmoxGuestKeys.CpuUsedPercent(guest.VmId),
-                WidgetCatalog.CategoryProxmox,
-                $"{guest.Name} CPU",
-                guest.Name,
-                "%"));
-            keys.Add(new WidgetCatalog.StatKeyDescriptor(
-                ProxmoxGuestKeys.MemoryUsedPercent(guest.VmId),
-                WidgetCatalog.CategoryProxmox,
-                $"{guest.Name} Memory",
-                guest.Name,
-                "%"));
+            foreach (var guest in hostSnapshot.Items)
+            {
+                keys.Add(new WidgetCatalog.StatKeyDescriptor(
+                    ProxmoxGuestKeys.CpuUsedPercent(hostSnapshot.HostId, guest.VmId),
+                    WidgetCatalog.CategoryProxmox,
+                    $"{hostSnapshot.DisplayName}: {guest.Name} CPU",
+                    guest.Name,
+                    "%"));
+                keys.Add(new WidgetCatalog.StatKeyDescriptor(
+                    ProxmoxGuestKeys.MemoryUsedPercent(hostSnapshot.HostId, guest.VmId),
+                    WidgetCatalog.CategoryProxmox,
+                    $"{hostSnapshot.DisplayName}: {guest.Name} Memory",
+                    guest.Name,
+                    "%"));
+            }
         }
 
         return keys;

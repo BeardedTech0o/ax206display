@@ -35,13 +35,28 @@ public class ProxmoxStatsPublisherTests
             },
         };
 
-        ProxmoxStatsPublisher.Publish(guests, hub.Publish);
+        ProxmoxStatsPublisher.Publish("host-1", guests, hub.Publish);
 
         var data = hub.GetSnapshot();
-        Assert.Equal(25.0, (double)data[ProxmoxGuestKeys.CpuUsedPercent(100)]);
-        Assert.Equal(50.0, (double)data[ProxmoxGuestKeys.MemoryUsedPercent(100)]);
-        Assert.Equal(0.0, (double)data[ProxmoxGuestKeys.CpuUsedPercent(200)]);
-        Assert.Equal(0.0, (double)data[ProxmoxGuestKeys.MemoryUsedPercent(200)]);
+        Assert.Equal(25.0, (double)data[ProxmoxGuestKeys.CpuUsedPercent("host-1", 100)]);
+        Assert.Equal(50.0, (double)data[ProxmoxGuestKeys.MemoryUsedPercent("host-1", 100)]);
+        Assert.Equal(0.0, (double)data[ProxmoxGuestKeys.CpuUsedPercent("host-1", 200)]);
+        Assert.Equal(0.0, (double)data[ProxmoxGuestKeys.MemoryUsedPercent("host-1", 200)]);
+    }
+
+    [Fact]
+    public void Publish_TwoHostsWithSameVmId_DoNotCollide()
+    {
+        var hub = new RenderDataHub();
+        var hostAGuest = new List<ProxmoxGuestStatus> { new() { Node = "pve1", VmId = 100, Name = "a", Type = "qemu", Status = "running", CpuUsageFraction = 0.1 } };
+        var hostBGuest = new List<ProxmoxGuestStatus> { new() { Node = "pve2", VmId = 100, Name = "b", Type = "qemu", Status = "running", CpuUsageFraction = 0.9 } };
+
+        ProxmoxStatsPublisher.Publish("host-a", hostAGuest, hub.Publish);
+        ProxmoxStatsPublisher.Publish("host-b", hostBGuest, hub.Publish);
+
+        var data = hub.GetSnapshot();
+        Assert.Equal(10.0, (double)data[ProxmoxGuestKeys.CpuUsedPercent("host-a", 100)]);
+        Assert.Equal(90.0, (double)data[ProxmoxGuestKeys.CpuUsedPercent("host-b", 100)]);
     }
 
     [Fact]
@@ -53,9 +68,9 @@ public class ProxmoxStatsPublisherTests
             new() { Node = "pve1", VmId = 300, Name = "weird-vm", Type = "qemu", Status = "running", MemoryTotalBytes = 0 },
         };
 
-        ProxmoxStatsPublisher.Publish(guests, hub.Publish);
+        ProxmoxStatsPublisher.Publish("host-1", guests, hub.Publish);
 
-        Assert.Equal(0.0, (double)hub.GetSnapshot()[ProxmoxGuestKeys.MemoryUsedPercent(300)]);
+        Assert.Equal(0.0, (double)hub.GetSnapshot()[ProxmoxGuestKeys.MemoryUsedPercent("host-1", 300)]);
     }
 
     [Fact]
@@ -75,12 +90,12 @@ public class ProxmoxStatsPublisherTests
             },
         };
 
-        ProxmoxStatsPublisher.PublishNodes(nodes, hub.Publish);
+        ProxmoxStatsPublisher.PublishNodes("host-1", nodes, hub.Publish);
 
         var data = hub.GetSnapshot();
-        Assert.Equal(40.0, (double)data[ProxmoxNodeKeys.CpuUsedPercent("pve1")]);
-        Assert.Equal(50.0, (double)data[ProxmoxNodeKeys.MemoryUsedPercent("pve1")]);
-        Assert.Equal(10.0, (double)data[ProxmoxNodeKeys.UptimeDays("pve1")]);
+        Assert.Equal(40.0, (double)data[ProxmoxNodeKeys.CpuUsedPercent("host-1", "pve1")]);
+        Assert.Equal(50.0, (double)data[ProxmoxNodeKeys.MemoryUsedPercent("host-1", "pve1")]);
+        Assert.Equal(10.0, (double)data[ProxmoxNodeKeys.UptimeDays("host-1", "pve1")]);
     }
 
     [Fact]
@@ -89,8 +104,8 @@ public class ProxmoxStatsPublisherTests
         var hub = new RenderDataHub();
         var nodes = new List<ProxmoxNodeStatus> { new() { Node = "pve1", Status = "online", MemoryTotalBytes = 0 } };
 
-        ProxmoxStatsPublisher.PublishNodes(nodes, hub.Publish);
+        ProxmoxStatsPublisher.PublishNodes("host-1", nodes, hub.Publish);
 
-        Assert.Equal(0.0, (double)hub.GetSnapshot()[ProxmoxNodeKeys.MemoryUsedPercent("pve1")]);
+        Assert.Equal(0.0, (double)hub.GetSnapshot()[ProxmoxNodeKeys.MemoryUsedPercent("host-1", "pve1")]);
     }
 }

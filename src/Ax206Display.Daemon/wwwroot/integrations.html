@@ -118,7 +118,7 @@
           ${bodyHtml}
           <div class="actions">
             <button onclick="event.stopPropagation(); testAndSave${cap(kind)}()" id="save-${kind}">Test &amp; Save</button>
-            <button class="danger" onclick="event.stopPropagation(); removeIntegration('${kind}')" id="remove-${kind}" style="display:none;">Remove</button>
+            <button class="danger" onclick="event.stopPropagation();" id="remove-${kind}" style="display:none;">Remove</button>
           </div>
           <div class="status" id="status-${kind}"></div>
         </div>
@@ -126,6 +126,9 @@
   }
 
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function escapeAttr(s) { return escapeHtml(s); }
 
   function toggleCard(kind) {
     document.getElementById(`card-${kind}`).classList.toggle('open');
@@ -163,55 +166,152 @@
     }
   }
 
-  async function removeIntegration(kind) {
+  async function removeIntegration(kind, id) {
     if (!confirm(`Remove the ${cap(kind)} integration? Its saved password/token will be deleted too.`)) return;
     setStatus(kind, 'Removing...', 'pending');
-    const res = await fetch(`/api/integrations/${kind}`, { method: 'DELETE' });
+    const res = await fetch(`/api/integrations/${kind}/${id}`, { method: 'DELETE' });
     if (!res.ok) { setStatus(kind, 'Could not remove.', 'error'); return; }
     setStatus(kind, 'Removed.', 'success');
     await loadAll();
   }
 
-  // ---- Proxmox ----
-  function proxmoxBody() {
+  // ---- Proxmox (multi-host: a list of cards plus one persistent blank "add" card) ----
+  let proxmoxHosts = [];
+
+  function proxmoxHostCard(localId, existing) {
+    const title = existing ? (existing.displayName || existing.baseUrl || 'Proxmox Host') : 'Add Proxmox Host';
+    const subtitle = existing ? escapeHtml(existing.baseUrl) : 'Configure another Proxmox VE host';
+    const badgeHtml = existing ? '<span class="badge configured">Configured</span>' : '';
+
     return `
-      <div class="field-row" style="grid-template-columns: 2fr 1fr;">
-        <div class="field"><label>Host URL</label><input type="text" id="proxmox-baseUrl" placeholder="https://proxmox.local:8006" /></div>
-        <div class="field"><label>Realm</label><input type="text" id="proxmox-realm" placeholder="pam" /></div>
-      </div>
-      <div class="field"><label>Username</label><input type="text" id="proxmox-username" /></div>
-      <div class="field"><label>Password</label><input type="password" id="proxmox-password" placeholder="Leave blank to keep saved password" /></div>
-      <div class="field">
-        <label>Pinned certificate thumbprint (optional, for self-signed certs)</label>
-        <div style="display:flex; gap:0.5rem;">
-          <input type="text" id="proxmox-thumbprint" style="flex:1;" />
-          <button type="button" class="secondary" onclick="event.stopPropagation(); detectCertificate('proxmox','proxmox-baseUrl','proxmox-thumbprint')">Detect</button>
+      <div class="card" id="pxcard-${localId}">
+        <div class="card-header" onclick="toggleProxmoxCard('${localId}')">
+          <div><h2>${escapeHtml(title)}</h2><div class="sub">${subtitle}</div></div>
+          <div style="display:flex; align-items:center; gap:0.6rem;">${badgeHtml}<span class="chevron">&#9656;</span></div>
         </div>
-        <div class="hint">Only needed if Proxmox serves a self-signed certificate, which is the common case on a LAN.</div>
+        <div class="card-body">
+          <div class="field"><label>Display name (optional)</label><input type="text" id="px-${localId}-displayName" value="${escapeAttr(existing?.displayName || '')}" placeholder="e.g. Main Cluster" /></div>
+          <div class="field-row" style="grid-template-columns: 2fr 1fr;">
+            <div class="field"><label>Host URL</label><input type="text" id="px-${localId}-baseUrl" value="${escapeAttr(existing?.baseUrl || '')}" placeholder="https://proxmox.local:8006" /></div>
+            <div class="field"><label>Realm</label><input type="text" id="px-${localId}-realm" value="${escapeAttr(existing?.realm || 'pam')}" /></div>
+          </div>
+          <div class="field"><label>Username</label><input type="text" id="px-${localId}-username" value="${escapeAttr(existing?.username || '')}" /></div>
+          <div class="field"><label>Password</label><input type="password" id="px-${localId}-password" placeholder="${existing ? 'Leave blank to keep saved password' : ''}" /></div>
+          <div class="field">
+            <label>Pinned certificate thumbprint (optional, for self-signed certs)</label>
+            <div style="display:flex; gap:0.5rem;">
+              <input type="text" id="px-${localId}-thumbprint" style="flex:1;" value="${escapeAttr(existing?.pinnedCertificateSha256Thumbprint || '')}" />
+              <button type="button" class="secondary" data-action="detect">Detect</button>
+            </div>
+            <div class="hint">Only needed if this host serves a self-signed certificate, which is the common case on a LAN.</div>
+          </div>
+          <div class="actions">
+            <button data-action="save">Test &amp; Save</button>
+            ${existing ? '<button class="danger" data-action="remove">Remove</button>' : ''}
+          </div>
+          <div class="status" id="px-status-${localId}"></div>
+        </div>
       </div>`;
   }
 
-  async function testAndSaveProxmox() {
-    setBusy('proxmox', true);
-    setStatus('proxmox', 'Testing...', 'pending');
+  function renderProxmoxSection() {
+    const container = document.getElementById('proxmoxHosts');
+    container.innerHTML = proxmoxHosts.map(h => proxmoxHostCard(h.id, h)).join('') + proxmoxHostCard('new', null);
+
+    for (const h of proxmoxHosts) {
+      wireProxmoxCard(h.id);
+    }
+    wireProxmoxCard('new');
+
+    if (proxmoxHosts.length === 0) {
+      document.getElementById('pxcard-new').classList.add('open');
+    }
+  }
+
+  function wireProxmoxCard(localId) {
+    const cardEl = document.getElementById(`pxcard-${localId}`);
+    cardEl.querySelector('[data-action="save"]').addEventListener('click', (e) => { e.stopPropagation(); testAndSaveProxmoxHost(localId); });
+    cardEl.querySelector('[data-action="detect"]').addEventListener('click', (e) => { e.stopPropagation(); detectCertificateForProxmoxHost(localId); });
+    cardEl.querySelector('[data-action="remove"]')?.addEventListener('click', (e) => { e.stopPropagation(); removeProxmoxHost(localId); });
+  }
+
+  function toggleProxmoxCard(localId) {
+    document.getElementById(`pxcard-${localId}`).classList.toggle('open');
+  }
+
+  function pxVal(localId, field) { return document.getElementById(`px-${localId}-${field}`).value.trim(); }
+
+  function setProxmoxStatus(localId, text, cls) {
+    const el = document.getElementById(`px-status-${localId}`);
+    if (!el) return;
+    el.textContent = text;
+    el.className = `status show ${cls || ''}`;
+  }
+
+  async function detectCertificateForProxmoxHost(localId) {
+    const baseUrl = pxVal(localId, 'baseUrl');
+    if (!baseUrl) { setProxmoxStatus(localId, 'Enter a host URL first.', 'error'); return; }
+    setProxmoxStatus(localId, 'Detecting certificate...', 'pending');
+    try {
+      const res = await fetch('/api/integrations/detect-certificate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseUrl }),
+      });
+      const body = await res.json();
+      if (!res.ok) { setProxmoxStatus(localId, body.detail || 'Could not detect a certificate.', 'error'); return; }
+      const trust = confirm(`Certificate thumbprint (SHA-256):\n${body.thumbprint}\n\nTrust this certificate for this connection?`);
+      if (trust) {
+        document.getElementById(`px-${localId}-thumbprint`).value = body.thumbprint;
+        setProxmoxStatus(localId, 'Certificate thumbprint set - click Test & Save to apply it.', 'pending');
+      } else {
+        setProxmoxStatus(localId, '', '');
+      }
+    } catch (err) {
+      setProxmoxStatus(localId, `Could not detect a certificate: ${err}`, 'error');
+    }
+  }
+
+  async function testAndSaveProxmoxHost(localId) {
+    const saveBtn = document.querySelector(`#pxcard-${localId} [data-action="save"]`);
+    saveBtn.disabled = true;
+    setProxmoxStatus(localId, 'Testing...', 'pending');
+    const isNew = localId === 'new';
+
     try {
       const res = await fetch('/api/integrations/proxmox/test-and-save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          baseUrl: val('proxmox-baseUrl'), username: val('proxmox-username'), realm: val('proxmox-realm') || null,
-          password: val('proxmox-password') || null, pinnedCertificateSha256Thumbprint: val('proxmox-thumbprint') || null,
+          id: isNew ? null : localId,
+          displayName: pxVal(localId, 'displayName') || null,
+          baseUrl: pxVal(localId, 'baseUrl'),
+          username: pxVal(localId, 'username'),
+          realm: pxVal(localId, 'realm') || null,
+          password: pxVal(localId, 'password') || null,
+          pinnedCertificateSha256Thumbprint: pxVal(localId, 'thumbprint') || null,
         }),
       });
       const body = await res.json();
-      if (!res.ok) { setStatus('proxmox', body.detail || 'Failed.', 'error'); return; }
-      setStatus('proxmox', body.message, 'success');
-      document.getElementById('proxmox-password').value = '';
+      if (!res.ok) {
+        setProxmoxStatus(localId, body.detail || 'Failed.', 'error');
+        saveBtn.disabled = false;
+        return;
+      }
+
       await loadAll();
+      const finalId = isNew ? body.id : localId;
+      document.getElementById(`pxcard-${finalId}`)?.classList.add('open');
+      setProxmoxStatus(finalId, body.message, 'success');
     } catch (err) {
-      setStatus('proxmox', `Failed: ${err}`, 'error');
-    } finally {
-      setBusy('proxmox', false);
+      setProxmoxStatus(localId, `Failed: ${err}`, 'error');
+      saveBtn.disabled = false;
     }
+  }
+
+  async function removeProxmoxHost(localId) {
+    if (!confirm('Remove this Proxmox host? Its saved password will be deleted too.')) return;
+    setProxmoxStatus(localId, 'Removing...', 'pending');
+    const res = await fetch(`/api/integrations/proxmox/${localId}`, { method: 'DELETE' });
+    if (!res.ok) { setProxmoxStatus(localId, 'Could not remove.', 'error'); return; }
+    await loadAll();
   }
 
   // ---- Pi-hole ----
@@ -345,13 +445,10 @@
     const res = await fetch('/api/integrations');
     const data = await res.json();
     STATE.proxmox = data.proxmox; STATE.pihole = data.pihole; STATE.unifi = data.unifi;
-    applyState('proxmox', data.proxmox, s => {
-      if (!s.configured) return;
-      document.getElementById('proxmox-baseUrl').value = s.baseUrl || '';
-      document.getElementById('proxmox-username').value = s.username || '';
-      document.getElementById('proxmox-realm').value = s.realm || 'pam';
-      document.getElementById('proxmox-thumbprint').value = s.pinnedCertificateSha256Thumbprint || '';
-    });
+
+    proxmoxHosts = data.proxmox || [];
+    renderProxmoxSection();
+
     applyState('pihole', data.pihole, s => {
       if (!s.configured) return;
       document.getElementById('pihole-host').value = s.host || '';
@@ -377,17 +474,21 @@
       badge.className = 'badge configured';
       sub.textContent = 'Leave the password field blank to keep the saved one.';
       removeBtn.style.display = '';
+      removeBtn.onclick = (e) => { e.stopPropagation(); removeIntegration(kind, s.id); };
     } else {
       badge.textContent = 'Not configured';
       badge.className = 'badge not-configured';
       sub.textContent = '';
       removeBtn.style.display = 'none';
+      removeBtn.onclick = null;
     }
     fill(s);
   }
 
-  document.getElementById('main').insertAdjacentHTML('beforeend',
-    card('proxmox', 'Proxmox', proxmoxBody()) +
+  document.getElementById('main').insertAdjacentHTML('beforeend', `
+    <h2 style="font-size:0.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin: 0.5rem 0 -0.25rem;">Proxmox</h2>
+    <div id="proxmoxHosts"></div>
+  ` +
     card('pihole', 'Pi-hole', piholeBody()) +
     card('unifi', 'UniFi', unifiBody())
   );

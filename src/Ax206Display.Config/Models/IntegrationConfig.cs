@@ -11,6 +11,15 @@ public sealed record IntegrationConfig
 
     public required string Kind { get; init; }
 
+    /// <summary>
+    /// User-facing label for this specific integration instance - only
+    /// meaningful for kinds that allow more than one (Proxmox, PBS): with
+    /// several hosts of the same kind configured, "Kind" alone can't tell
+    /// them apart in a list. Null falls back to displaying <see cref="BaseUrl"/>.
+    /// Kinds still limited to a single instance (Pi-hole, UniFi) leave this null.
+    /// </summary>
+    public string? DisplayName { get; init; }
+
     public required string BaseUrl { get; init; }
 
     public string? Username { get; init; }

@@ -25,6 +25,13 @@ namespace Ax206Display.Daemon.Web;
 /// "PUT /api/integrations/{kind}" - saving without a successful login test
 /// first would let a typo silently break a pump service's next poll instead
 /// of failing immediately where the user can see it.
+///
+/// Proxmox allows more than one configured host (unlike Pi-hole/UniFi, which
+/// stay one-per-kind): its test-and-save takes an optional Id - present to
+/// update that specific host, absent to add a new one - and GetIntegrationsAsync
+/// returns it as a list rather than a single object. SaveIntegrationAsync's
+/// match-and-replace-by-Id (not by Kind) is what makes both shapes work
+/// through the same save path without a special case for either.
 /// </summary>
 public static class IntegrationsEndpoints
 {
@@ -38,7 +45,7 @@ public static class IntegrationsEndpoints
         app.MapPost("/api/integrations/proxmox/test-and-save", TestAndSaveProxmoxAsync);
         app.MapPost("/api/integrations/pihole/test-and-save", TestAndSavePiHoleAsync);
         app.MapPost("/api/integrations/unifi/test-and-save", TestAndSaveUniFiAsync);
-        app.MapDelete("/api/integrations/{kind}", RemoveIntegrationAsync);
+        app.MapDelete("/api/integrations/{kind}/{id}", RemoveIntegrationAsync);
         app.MapPost("/api/integrations/detect-certificate", DetectCertificateAsync);
     }
 
@@ -46,43 +53,38 @@ public static class IntegrationsEndpoints
     {
         var config = await configService.LoadAsync(cancellationToken);
 
-        object? Describe(string kind)
-        {
-            var integration = config.Integrations.FirstOrDefault(i => i.Kind == kind);
-            if (integration is null)
+        var proxmoxHosts = config.Integrations
+            .Where(i => i.Kind == ProxmoxKind)
+            .Select(i => new
             {
-                return new { configured = false };
-            }
+                id = i.Id,
+                displayName = i.DisplayName,
+                baseUrl = i.BaseUrl,
+                username = i.Username,
+                realm = i.Realm ?? "pam",
+                pinnedCertificateSha256Thumbprint = i.PinnedCertificateSha256Thumbprint,
+            })
+            .ToList();
 
-            return kind switch
-            {
-                ProxmoxKind => new
-                {
-                    configured = true,
-                    baseUrl = integration.BaseUrl,
-                    username = integration.Username,
-                    realm = integration.Realm ?? "pam",
-                    pinnedCertificateSha256Thumbprint = integration.PinnedCertificateSha256Thumbprint,
-                },
-                PiHoleKind => DescribePiHole(integration),
-                UniFiKind => new
-                {
-                    configured = true,
-                    baseUrl = integration.BaseUrl,
-                    username = integration.Username,
-                    site = integration.Site ?? "default",
-                    hasTotpSecret = integration.TotpSecretKey is not null,
-                    pinnedCertificateSha256Thumbprint = integration.PinnedCertificateSha256Thumbprint,
-                },
-                _ => new { configured = true },
-            };
-        }
+        var pihole = config.Integrations.FirstOrDefault(i => i.Kind == PiHoleKind);
+        var unifi = config.Integrations.FirstOrDefault(i => i.Kind == UniFiKind);
 
         return Results.Ok(new
         {
-            proxmox = Describe(ProxmoxKind),
-            pihole = Describe(PiHoleKind),
-            unifi = Describe(UniFiKind),
+            proxmox = proxmoxHosts,
+            pihole = pihole is null ? new { configured = false } : DescribePiHole(pihole),
+            unifi = unifi is null
+                ? (object)new { configured = false }
+                : new
+                {
+                    configured = true,
+                    id = unifi.Id,
+                    baseUrl = unifi.BaseUrl,
+                    username = unifi.Username,
+                    site = unifi.Site ?? "default",
+                    hasTotpSecret = unifi.TotpSecretKey is not null,
+                    pinnedCertificateSha256Thumbprint = unifi.PinnedCertificateSha256Thumbprint,
+                },
         });
     }
 
@@ -90,12 +92,13 @@ public static class IntegrationsEndpoints
     {
         if (!Uri.TryCreate(integration.BaseUrl, UriKind.Absolute, out var uri))
         {
-            return new { configured = true, host = integration.BaseUrl, port = 80, useHttps = false, pinnedCertificateSha256Thumbprint = integration.PinnedCertificateSha256Thumbprint };
+            return new { configured = true, id = integration.Id, host = integration.BaseUrl, port = 80, useHttps = false, pinnedCertificateSha256Thumbprint = integration.PinnedCertificateSha256Thumbprint };
         }
 
         return new
         {
             configured = true,
+            id = integration.Id,
             host = uri.Host,
             port = uri.Port,
             useHttps = uri.Scheme == Uri.UriSchemeHttps,
@@ -109,6 +112,7 @@ public static class IntegrationsEndpoints
         var username = request.Username?.Trim() ?? string.Empty;
         var realm = string.IsNullOrWhiteSpace(request.Realm) ? "pam" : request.Realm.Trim();
         var thumbprint = string.IsNullOrWhiteSpace(request.PinnedCertificateSha256Thumbprint) ? null : request.PinnedCertificateSha256Thumbprint.Trim();
+        var displayName = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim();
 
         if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(username))
         {
@@ -116,7 +120,11 @@ public static class IntegrationsEndpoints
         }
 
         var config = await configService.LoadAsync(cancellationToken);
-        var existing = config.Integrations.FirstOrDefault(i => i.Kind == ProxmoxKind);
+
+        // An Id means "update this specific host"; omitted always means "add
+        // a new one" - unlike Pi-hole/UniFi there's no single existing entry
+        // to fall back to matching by Kind alone.
+        var existing = request.Id is { } id ? config.Integrations.FirstOrDefault(i => i.Id == id && i.Kind == ProxmoxKind) : null;
 
         var password = await ResolveSecretAsync(secretStore, request.Password, existing?.SecretKey, cancellationToken);
         if (string.IsNullOrEmpty(password))
@@ -131,6 +139,7 @@ public static class IntegrationsEndpoints
         {
             Id = integrationId,
             Kind = ProxmoxKind,
+            DisplayName = displayName,
             BaseUrl = baseUrl,
             Username = username,
             Realm = realm,
@@ -146,7 +155,7 @@ public static class IntegrationsEndpoints
             var guests = await client.GetGuestStatusesAsync(cancellationToken);
 
             await SaveIntegrationAsync(configService, secretStore, config, testConfig, secretKey, password, cancellationToken: cancellationToken);
-            return Results.Ok(new { message = $"Connected - found {guests.Count} guest(s). Saved." });
+            return Results.Ok(new { id = integrationId, message = $"Connected - found {guests.Count} guest(s). Saved." });
         }
         catch (Exception ex)
         {
@@ -286,10 +295,10 @@ public static class IntegrationsEndpoints
         }
     }
 
-    private static async Task<IResult> RemoveIntegrationAsync(string kind, ConfigService configService, SecretStore secretStore, CancellationToken cancellationToken)
+    private static async Task<IResult> RemoveIntegrationAsync(string kind, string id, ConfigService configService, SecretStore secretStore, CancellationToken cancellationToken)
     {
         var config = await configService.LoadAsync(cancellationToken);
-        var existing = config.Integrations.FirstOrDefault(i => i.Kind == kind);
+        var existing = config.Integrations.FirstOrDefault(i => i.Kind == kind && i.Id == id);
         if (existing is null)
         {
             return Results.NotFound();
@@ -307,7 +316,7 @@ public static class IntegrationsEndpoints
             await secretStore.SaveAsync(cancellationToken);
         }
 
-        var updated = config.Integrations.Where(i => i.Kind != kind).ToList();
+        var updated = config.Integrations.Where(i => i.Id != id).ToList();
         await configService.SaveAsync(config with { Integrations = updated }, cancellationToken);
         return Results.Ok();
     }
@@ -371,12 +380,17 @@ public static class IntegrationsEndpoints
 
         await secretStore.SaveAsync(cancellationToken);
 
-        var updatedIntegrations = config.Integrations.Where(i => i.Kind != testConfig.Kind).ToList();
+        // Matched by Id, not Kind - the only way this same save path works
+        // correctly for both a singleton kind (Pi-hole/UniFi: at most one
+        // entry ever shares an Id, since there's at most one entry period)
+        // and a multi-instance kind (Proxmox: replaces only the one host
+        // being edited, leaves every other configured host untouched).
+        var updatedIntegrations = config.Integrations.Where(i => i.Id != testConfig.Id).ToList();
         updatedIntegrations.Add(testConfig);
         await configService.SaveAsync(config with { Integrations = updatedIntegrations }, cancellationToken);
     }
 
-    private sealed record ProxmoxTestRequest(string BaseUrl, string Username, string? Realm, string? Password, string? PinnedCertificateSha256Thumbprint);
+    private sealed record ProxmoxTestRequest(string? Id, string? DisplayName, string BaseUrl, string Username, string? Realm, string? Password, string? PinnedCertificateSha256Thumbprint);
 
     private sealed record PiHoleTestRequest(string Host, int Port, bool UseHttps, string? AppPassword, string? PinnedCertificateSha256Thumbprint);
 

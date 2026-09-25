@@ -10,14 +10,17 @@ using Microsoft.Extensions.Logging;
 namespace Ax206Display.App.Services;
 
 /// <summary>
-/// Polls every node and VM/container from a configured Proxmox integration
-/// (Kind == "proxmox" in AppConfig.Integrations) and publishes their
-/// CPU/memory (and each node's uptime) into the RenderDataHub, plus keeps
-/// ProxmoxGuestDirectory/ProxmoxNodeDirectory current so the Widget Designer
-/// can list them without touching the network itself. Idles quietly
-/// (checking again next poll) if no Proxmox integration is configured yet,
-/// and re-authenticates automatically if the session ticket is rejected
-/// (e.g. after it expires).
+/// Polls every node and VM/container from every configured Proxmox
+/// integration (Kind == "proxmox" in AppConfig.Integrations - there can be
+/// more than one host, unlike Pi-hole/UniFi) and publishes their CPU/memory
+/// (and each node's uptime) into the RenderDataHub under keys namespaced by
+/// that host's IntegrationConfig.Id (see ProxmoxGuestKeys/ProxmoxNodeKeys -
+/// a VMID or node name is only unique within one host, not across several),
+/// plus keeps ProxmoxGuestDirectory/ProxmoxNodeDirectory current so the
+/// Widget Designer can list them without touching the network itself. Each
+/// host is logged in/polled/re-authenticated independently - one host being
+/// unreachable or having an expired session ticket never affects any other
+/// configured host's polling.
 /// </summary>
 public sealed partial class ProxmoxPumpService : BackgroundService
 {
@@ -31,8 +34,7 @@ public sealed partial class ProxmoxPumpService : BackgroundService
     private readonly ProxmoxNodeDirectory _nodeDirectory;
     private readonly ILogger<ProxmoxPumpService> _logger;
 
-    private IProxmoxClient? _client;
-    private string? _loggedInIntegrationId;
+    private readonly Dictionary<string, IProxmoxClient> _clientsByHostId = [];
 
     public ProxmoxPumpService(
         ConfigService configService,
@@ -58,15 +60,15 @@ public sealed partial class ProxmoxPumpService : BackgroundService
         {
             try
             {
-                await PollOnceAsync(stoppingToken);
+                await PollAllHostsAsync(stoppingToken);
             }
             catch (Exception ex)
             {
+                // Only reachable for a failure outside PollHostAsync's own
+                // per-host try/catch (e.g. ConfigService.LoadAsync itself
+                // failing) - an individual host's failure never bubbles up
+                // this far, see PollAllHostsAsync.
                 LogPollFailed(ex);
-                // Force a fresh login attempt next time - the failure may
-                // have been an expired/rejected session ticket.
-                _client = null;
-                _loggedInIntegrationId = null;
             }
 
             try
@@ -80,35 +82,66 @@ public sealed partial class ProxmoxPumpService : BackgroundService
         }
     }
 
-    private async Task PollOnceAsync(CancellationToken cancellationToken)
+    private async Task PollAllHostsAsync(CancellationToken cancellationToken)
     {
         var config = await _configService.LoadAsync(cancellationToken);
-        var integration = config.Integrations.FirstOrDefault(i => i.Kind == IntegrationKind);
-        if (integration is null)
+        var hosts = config.Integrations.Where(i => i.Kind == IntegrationKind).ToList();
+        var configuredHostIds = hosts.Select(h => h.Id).ToHashSet();
+
+        // Drop state for any host removed from config since the last poll -
+        // otherwise its directory entry (and a stale logged-in client) would
+        // linger forever.
+        foreach (var staleHostId in _clientsByHostId.Keys.Where(id => !configuredHostIds.Contains(id)).ToList())
         {
-            _client = null;
-            _loggedInIntegrationId = null;
-            return;
+            _clientsByHostId.Remove(staleHostId);
         }
 
-        if (_client is null || _loggedInIntegrationId != integration.Id)
+        foreach (var hostId in _guestDirectory.GetSnapshot().Keys.Where(id => !configuredHostIds.Contains(id)).ToList())
         {
-            _client = await LogInAsync(integration, cancellationToken);
-            _loggedInIntegrationId = _client is null ? null : integration.Id;
+            _guestDirectory.RemoveHost(hostId);
+            _nodeDirectory.RemoveHost(hostId);
+        }
 
-            if (_client is null)
+        foreach (var host in hosts)
+        {
+            try
+            {
+                await PollHostAsync(host, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                LogHostPollFailed(ex, host.Id);
+                // Force a fresh login attempt for just this host next time -
+                // the failure may have been an expired/rejected session
+                // ticket. Other hosts' clients are untouched.
+                _clientsByHostId.Remove(host.Id);
+            }
+        }
+    }
+
+    private async Task PollHostAsync(IntegrationConfig host, CancellationToken cancellationToken)
+    {
+        if (!_clientsByHostId.TryGetValue(host.Id, out var client))
+        {
+            var loggedIn = await LogInAsync(host, cancellationToken);
+            if (loggedIn is null)
             {
                 return;
             }
+
+            client = loggedIn;
+            _clientsByHostId[host.Id] = client;
         }
 
-        var nodes = await _client.GetNodeStatusesAsync(cancellationToken);
-        ProxmoxStatsPublisher.PublishNodes(nodes, _hub.Publish);
-        _nodeDirectory.Update(nodes);
+        var displayName = host.DisplayName ?? host.BaseUrl;
 
-        var guests = await _client.GetGuestStatusesAsync(cancellationToken);
-        ProxmoxStatsPublisher.Publish(guests, _hub.Publish);
-        _guestDirectory.Update(guests);
+        var nodes = await client.GetNodeStatusesAsync(cancellationToken);
+        ProxmoxStatsPublisher.PublishNodes(host.Id, nodes, _hub.Publish);
+        _nodeDirectory.Update(host.Id, displayName, nodes);
+
+        var guests = await client.GetGuestStatusesAsync(cancellationToken);
+        ProxmoxStatsPublisher.Publish(host.Id, guests, _hub.Publish);
+        _guestDirectory.Update(host.Id, displayName, guests);
     }
 
     private async Task<IProxmoxClient?> LogInAsync(IntegrationConfig integration, CancellationToken cancellationToken)
@@ -135,6 +168,9 @@ public sealed partial class ProxmoxPumpService : BackgroundService
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Proxmox poll failed; will retry.")]
     private partial void LogPollFailed(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Proxmox host {HostId} poll failed; will retry that host.")]
+    private partial void LogHostPollFailed(Exception exception, string hostId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Proxmox integration {IntegrationId} is missing a username or password; skipping.")]
     private partial void LogMissingCredentials(string integrationId);
