@@ -31,9 +31,13 @@ jobs:
 
       - name: Resolve release tag
         id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
         shell: pwsh
         run: |
-          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          $tag = if ("$env:EVENT_NAME" -eq "workflow_dispatch") { "$env:INPUT_TAG" } else { "$env:REF_NAME" }
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           # The MSI Package/@Version needs a bare N.N.N number, not the tag's
           # leading "v" - tags are required to match "v*.*.*" (see the `on:`
