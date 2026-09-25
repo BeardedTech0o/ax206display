@@ -159,13 +159,35 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          gh release create "${{ steps.tag.outputs.tag }}" `
+          # A "which file do I need" table above GitHub's generated
+          # changelog. The Linux tarballs it lists are attached by the
+          # release-linux job below once this release exists.
+          $tag = $env:TAG
+          @"
+          ## Which file do I need?
+
+          | You're running | Download |
+          |---|---|
+          | Windows 10/11, installer (recommended) | ``Ax206Display-$tag-win-x64.msi`` |
+          | Windows 10/11, portable | ``Ax206Display-$tag-win-x64.zip`` (keep ``libusb-1.0.dll`` next to the exe) |
+          | Raspberry Pi OS 64-bit (Pi 3, 4, 5, Zero 2 W) | ``ax206display-$tag-linux-arm64.tar.gz`` |
+          | Raspberry Pi OS 32-bit | ``ax206display-$tag-linux-arm.tar.gz`` |
+          | Other Linux PC (x64) | ``ax206display-$tag-linux-x64.tar.gz`` |
+
+          Linux: unpack, then ``sudo ./install.sh``. Full guide: [docs/raspberry-pi.md](https://github.com/${{ github.repository }}/blob/$tag/docs/raspberry-pi.md).
+          Each file has a matching ``.sha256`` checksum.
+
+          "@ | Out-File -FilePath release-notes.md -Encoding utf8
+
+          gh release create $tag `
             "${{ steps.asset.outputs.msiName }}" `
             "${{ steps.asset.outputs.msiName }}.sha256" `
             "${{ steps.asset.outputs.zipName }}" `
             "${{ steps.asset.outputs.zipName }}.sha256" `
-            --title "${{ steps.tag.outputs.tag }}" `
+            --title $tag `
+            --notes-file release-notes.md `
             --generate-notes
 
   # Self-contained Linux tarballs (no .NET install needed on the target),
@@ -181,10 +203,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Values arrive through env, never pasted into the script: a tag typed
+      # into the dispatch form is user input.
       - name: Resolve release tag
         id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then tag="${{ inputs.tag }}"; else tag="${{ github.ref_name }}"; fi
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then tag="$INPUT_TAG"; else tag="$REF_NAME"; fi
+          case "$tag" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::Tag must look like v1.2.3, got '$tag'"; exit 1 ;;
+          esac
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Setup .NET
@@ -193,13 +225,18 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Build tarball
-        run: packaging/linux/build-release.sh ${{ matrix.rid }} ${{ steps.tag.outputs.tag }} artifacts
+        env:
+          RID: ${{ matrix.rid }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: packaging/linux/build-release.sh "$RID" "$TAG" artifacts
 
       - name: Attach to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          RID: ${{ matrix.rid }}
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          gh release upload "${{ steps.tag.outputs.tag }}" \
-            "artifacts/ax206display-${{ steps.tag.outputs.tag }}-${{ matrix.rid }}.tar.gz" \
-            "artifacts/ax206display-${{ steps.tag.outputs.tag }}-${{ matrix.rid }}.tar.gz.sha256" \
+          gh release upload "$TAG" \
+            "artifacts/ax206display-$TAG-$RID.tar.gz" \
+            "artifacts/ax206display-$TAG-$RID.tar.gz.sha256" \
             --clobber
