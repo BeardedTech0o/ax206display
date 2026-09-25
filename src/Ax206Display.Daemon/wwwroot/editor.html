@@ -197,7 +197,27 @@
     statusEl.className = cls || '';
   }
 
+  async function loadDynamicStatKeys() {
+    // Proxmox/PBS keys are only known once a pump service has actually
+    // polled those hosts (unlike the fixed system/network/Pi-hole/UniFi
+    // keys above) - fetched once here and merged in, same reason the
+    // Windows Designer reads its Proxmox/PBS directories live instead of a
+    // fixed list. Best-effort: if it fails, the fixed keys above still work.
+    try {
+      const res = await fetch('/api/stat-keys/dynamic');
+      if (!res.ok) return;
+      const dynamicKeys = await res.json();
+      for (const { key, label } of dynamicKeys) {
+        STAT_KEYS.push([key, label]);
+      }
+    } catch {
+      // Non-critical - proceed with just the fixed keys.
+    }
+  }
+
   async function load() {
+    await loadDynamicStatKeys();
+
     const res = await fetch(`/api/devices/${encodeURIComponent(deviceId)}`);
     if (!res.ok) { document.body.innerHTML = '<p style="padding:2rem;color:#f28b82;">Device not found.</p>'; return; }
     device = await res.json();

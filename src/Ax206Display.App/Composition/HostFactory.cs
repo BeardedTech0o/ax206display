@@ -4,6 +4,7 @@ using Ax206Display.App.Views;
 using Ax206Display.Config.Secrets;
 using Ax206Display.Config.Services;
 using Ax206Display.DataSources.Network;
+using Ax206Display.DataSources.Pbs;
 using Ax206Display.DataSources.Proxmox;
 using Ax206Display.DataSources.SystemMonitor;
 using Ax206Display.DataSources.Weather;
@@ -42,12 +43,14 @@ public static class HostFactory
         services.AddSingleton<IRenderDataProvider>(sp => sp.GetRequiredService<RenderDataHub>());
         services.AddSingleton<ProxmoxGuestDirectory>();
         services.AddSingleton<ProxmoxNodeDirectory>();
+        services.AddSingleton<PbsDatastoreDirectory>();
 
         services.AddSingleton<TrayIconHostedService>();
         services.AddHostedService(sp => sp.GetRequiredService<TrayIconHostedService>());
         services.AddHostedService<SystemMonitorPumpService>();
         services.AddHostedService<NetworkSpeedPumpService>();
         services.AddHostedService<ProxmoxPumpService>();
+        services.AddHostedService<PbsPumpService>();
         services.AddHostedService<PiHolePumpService>();
         services.AddHostedService<UniFiPumpService>();
         services.AddSingleton<DisplayManagerHostedService>();

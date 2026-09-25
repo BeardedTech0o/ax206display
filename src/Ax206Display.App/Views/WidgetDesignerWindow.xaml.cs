@@ -9,6 +9,7 @@ using Ax206Display.App.Services;
 using Ax206Display.App.Views.Designer;
 using Ax206Display.Config.Models;
 using Ax206Display.Config.Services;
+using Ax206Display.DataSources.Pbs;
 using Ax206Display.DataSources.Proxmox;
 using Ax206Display.Rendering.Compositing;
 using Ax206Display.Rendering.Playback;
@@ -32,6 +33,7 @@ public partial class WidgetDesignerWindow : Window
     private readonly IRenderDataProvider _dataProvider;
     private readonly ProxmoxGuestDirectory _proxmoxGuestDirectory;
     private readonly ProxmoxNodeDirectory _proxmoxNodeDirectory;
+    private readonly PbsDatastoreDirectory _pbsDatastoreDirectory;
     private readonly DisplayManagerHostedService _displayManager;
     private readonly DispatcherTimer _timer;
 
@@ -50,7 +52,13 @@ public partial class WidgetDesignerWindow : Window
     private System.Windows.Shapes.Line? _verticalGuideLine;
     private System.Windows.Shapes.Line? _horizontalGuideLine;
 
-    public WidgetDesignerWindow(ConfigService configService, IRenderDataProvider dataProvider, ProxmoxGuestDirectory proxmoxGuestDirectory, ProxmoxNodeDirectory proxmoxNodeDirectory, DisplayManagerHostedService displayManager)
+    public WidgetDesignerWindow(
+        ConfigService configService,
+        IRenderDataProvider dataProvider,
+        ProxmoxGuestDirectory proxmoxGuestDirectory,
+        ProxmoxNodeDirectory proxmoxNodeDirectory,
+        PbsDatastoreDirectory pbsDatastoreDirectory,
+        DisplayManagerHostedService displayManager)
     {
         InitializeComponent();
         Theme.DarkTitleBar.Apply(this);
@@ -58,6 +66,7 @@ public partial class WidgetDesignerWindow : Window
         _dataProvider = dataProvider;
         _proxmoxGuestDirectory = proxmoxGuestDirectory;
         _proxmoxNodeDirectory = proxmoxNodeDirectory;
+        _pbsDatastoreDirectory = pbsDatastoreDirectory;
         _displayManager = displayManager;
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -885,6 +894,19 @@ public partial class WidgetDesignerWindow : Window
                     WidgetCatalog.CategoryProxmox,
                     $"{hostSnapshot.DisplayName}: {guest.Name} Memory",
                     guest.Name,
+                    "%"));
+            }
+        }
+
+        foreach (var hostSnapshot in _pbsDatastoreDirectory.GetSnapshot().Values)
+        {
+            foreach (var datastore in hostSnapshot.Items)
+            {
+                keys.Add(new WidgetCatalog.StatKeyDescriptor(
+                    PbsStatKeys.UsedPercent(hostSnapshot.HostId, datastore.Store),
+                    WidgetCatalog.CategoryPbs,
+                    $"{hostSnapshot.DisplayName}: {datastore.Store} Storage",
+                    datastore.Store,
                     "%"));
             }
         }

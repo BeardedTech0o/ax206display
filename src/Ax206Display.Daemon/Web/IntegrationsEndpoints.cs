@@ -3,6 +3,7 @@ using Ax206Display.Config.Secrets;
 using Ax206Display.Config.Services;
 using Ax206Display.DataSources.Auth;
 using Ax206Display.DataSources.Http;
+using Ax206Display.DataSources.Pbs;
 using Ax206Display.DataSources.PiHole;
 using Ax206Display.DataSources.Proxmox;
 using Ax206Display.DataSources.UniFi;
@@ -26,16 +27,18 @@ namespace Ax206Display.Daemon.Web;
 /// first would let a typo silently break a pump service's next poll instead
 /// of failing immediately where the user can see it.
 ///
-/// Proxmox allows more than one configured host (unlike Pi-hole/UniFi, which
-/// stay one-per-kind): its test-and-save takes an optional Id - present to
-/// update that specific host, absent to add a new one - and GetIntegrationsAsync
-/// returns it as a list rather than a single object. SaveIntegrationAsync's
-/// match-and-replace-by-Id (not by Kind) is what makes both shapes work
-/// through the same save path without a special case for either.
+/// Proxmox and PBS both allow more than one configured host (unlike
+/// Pi-hole/UniFi, which stay one-per-kind): their test-and-save endpoints
+/// take an optional Id - present to update that specific host, absent to add
+/// a new one - and GetIntegrationsAsync returns each as a list rather than a
+/// single object. SaveIntegrationAsync's match-and-replace-by-Id (not by
+/// Kind) is what makes both shapes work through the same save path without a
+/// special case for either.
 /// </summary>
 public static class IntegrationsEndpoints
 {
     private const string ProxmoxKind = "proxmox";
+    private const string PbsKind = "pbs";
     private const string PiHoleKind = "pihole";
     private const string UniFiKind = "unifi";
 
@@ -43,6 +46,7 @@ public static class IntegrationsEndpoints
     {
         app.MapGet("/api/integrations", GetIntegrationsAsync);
         app.MapPost("/api/integrations/proxmox/test-and-save", TestAndSaveProxmoxAsync);
+        app.MapPost("/api/integrations/pbs/test-and-save", TestAndSavePbsAsync);
         app.MapPost("/api/integrations/pihole/test-and-save", TestAndSavePiHoleAsync);
         app.MapPost("/api/integrations/unifi/test-and-save", TestAndSaveUniFiAsync);
         app.MapDelete("/api/integrations/{kind}/{id}", RemoveIntegrationAsync);
@@ -53,18 +57,18 @@ public static class IntegrationsEndpoints
     {
         var config = await configService.LoadAsync(cancellationToken);
 
-        var proxmoxHosts = config.Integrations
-            .Where(i => i.Kind == ProxmoxKind)
-            .Select(i => new
-            {
-                id = i.Id,
-                displayName = i.DisplayName,
-                baseUrl = i.BaseUrl,
-                username = i.Username,
-                realm = i.Realm ?? "pam",
-                pinnedCertificateSha256Thumbprint = i.PinnedCertificateSha256Thumbprint,
-            })
-            .ToList();
+        object DescribeHost(IntegrationConfig i) => new
+        {
+            id = i.Id,
+            displayName = i.DisplayName,
+            baseUrl = i.BaseUrl,
+            username = i.Username,
+            realm = i.Realm ?? "pam",
+            pinnedCertificateSha256Thumbprint = i.PinnedCertificateSha256Thumbprint,
+        };
+
+        var proxmoxHosts = config.Integrations.Where(i => i.Kind == ProxmoxKind).Select(DescribeHost).ToList();
+        var pbsHosts = config.Integrations.Where(i => i.Kind == PbsKind).Select(DescribeHost).ToList();
 
         var pihole = config.Integrations.FirstOrDefault(i => i.Kind == PiHoleKind);
         var unifi = config.Integrations.FirstOrDefault(i => i.Kind == UniFiKind);
@@ -72,6 +76,7 @@ public static class IntegrationsEndpoints
         return Results.Ok(new
         {
             proxmox = proxmoxHosts,
+            pbs = pbsHosts,
             pihole = pihole is null ? new { configured = false } : DescribePiHole(pihole),
             unifi = unifi is null
                 ? (object)new { configured = false }
@@ -156,6 +161,59 @@ public static class IntegrationsEndpoints
 
             await SaveIntegrationAsync(configService, secretStore, config, testConfig, secretKey, password, cancellationToken: cancellationToken);
             return Results.Ok(new { id = integrationId, message = $"Connected - found {guests.Count} guest(s). Saved." });
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new { detail = $"Failed: {ex.Message}" });
+        }
+    }
+
+    private static async Task<IResult> TestAndSavePbsAsync(PbsTestRequest request, ConfigService configService, SecretStore secretStore, CancellationToken cancellationToken)
+    {
+        var baseUrl = request.BaseUrl?.Trim() ?? string.Empty;
+        var username = request.Username?.Trim() ?? string.Empty;
+        var realm = string.IsNullOrWhiteSpace(request.Realm) ? "pam" : request.Realm.Trim();
+        var thumbprint = string.IsNullOrWhiteSpace(request.PinnedCertificateSha256Thumbprint) ? null : request.PinnedCertificateSha256Thumbprint.Trim();
+        var displayName = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim();
+
+        if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(username))
+        {
+            return Results.BadRequest(new { detail = "Host URL and username are required." });
+        }
+
+        var config = await configService.LoadAsync(cancellationToken);
+        var existing = request.Id is { } id ? config.Integrations.FirstOrDefault(i => i.Id == id && i.Kind == PbsKind) : null;
+
+        var password = await ResolveSecretAsync(secretStore, request.Password, existing?.SecretKey, cancellationToken);
+        if (string.IsNullOrEmpty(password))
+        {
+            return Results.BadRequest(new { detail = "Password is required." });
+        }
+
+        var integrationId = existing?.Id ?? Guid.NewGuid().ToString("N");
+        var secretKey = existing?.SecretKey ?? $"integration.{integrationId}";
+
+        var testConfig = new IntegrationConfig
+        {
+            Id = integrationId,
+            Kind = PbsKind,
+            DisplayName = displayName,
+            BaseUrl = baseUrl,
+            Username = username,
+            Realm = realm,
+            SecretKey = secretKey,
+            PinnedCertificateSha256Thumbprint = thumbprint,
+        };
+
+        try
+        {
+            using var httpClient = IntegrationHttpClientFactory.Create(testConfig, enableCookies: false);
+            var client = new PbsClient(httpClient);
+            await client.LoginAsync(username, password, realm, cancellationToken);
+            var datastores = await client.GetDatastoreUsageAsync(cancellationToken);
+
+            await SaveIntegrationAsync(configService, secretStore, config, testConfig, secretKey, password, cancellationToken: cancellationToken);
+            return Results.Ok(new { id = integrationId, message = $"Connected - found {datastores.Count} datastore(s). Saved." });
         }
         catch (Exception ex)
         {
@@ -391,6 +449,8 @@ public static class IntegrationsEndpoints
     }
 
     private sealed record ProxmoxTestRequest(string? Id, string? DisplayName, string BaseUrl, string Username, string? Realm, string? Password, string? PinnedCertificateSha256Thumbprint);
+
+    private sealed record PbsTestRequest(string? Id, string? DisplayName, string BaseUrl, string Username, string? Realm, string? Password, string? PinnedCertificateSha256Thumbprint);
 
     private sealed record PiHoleTestRequest(string Host, int Port, bool UseHttps, string? AppPassword, string? PinnedCertificateSha256Thumbprint);
 

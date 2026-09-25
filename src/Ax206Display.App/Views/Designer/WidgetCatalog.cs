@@ -28,6 +28,7 @@ internal static class WidgetCatalog
     internal const string CategoryPiHole = "Pi-hole";
     internal const string CategoryUniFi = "UniFi";
     internal const string CategoryProxmox = "Proxmox";
+    internal const string CategoryPbs = "Proxmox Backup Server";
 
     internal sealed record StatKeyDescriptor(string Key, string Category, string DisplayName, string DefaultLabel, string DefaultUnit);
 

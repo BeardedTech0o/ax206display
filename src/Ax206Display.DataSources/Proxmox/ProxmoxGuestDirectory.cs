@@ -1,3 +1,5 @@
+using Ax206Display.DataSources.Common;
+
 namespace Ax206Display.DataSources.Proxmox;
 
 /// <summary>
@@ -12,15 +14,15 @@ namespace Ax206Display.DataSources.Proxmox;
 /// </summary>
 public sealed class ProxmoxGuestDirectory
 {
-    private Dictionary<string, ProxmoxHostSnapshot<ProxmoxGuestStatus>> _byHost = [];
+    private Dictionary<string, IntegrationHostSnapshot<ProxmoxGuestStatus>> _byHost = [];
 
-    public IReadOnlyDictionary<string, ProxmoxHostSnapshot<ProxmoxGuestStatus>> GetSnapshot() => _byHost;
+    public IReadOnlyDictionary<string, IntegrationHostSnapshot<ProxmoxGuestStatus>> GetSnapshot() => _byHost;
 
     public void Update(string hostId, string displayName, IReadOnlyList<ProxmoxGuestStatus> guests)
     {
-        var next = new Dictionary<string, ProxmoxHostSnapshot<ProxmoxGuestStatus>>(_byHost)
+        var next = new Dictionary<string, IntegrationHostSnapshot<ProxmoxGuestStatus>>(_byHost)
         {
-            [hostId] = new ProxmoxHostSnapshot<ProxmoxGuestStatus>(hostId, displayName, guests),
+            [hostId] = new IntegrationHostSnapshot<ProxmoxGuestStatus>(hostId, displayName, guests),
         };
         _byHost = next;
     }
@@ -33,7 +35,7 @@ public sealed class ProxmoxGuestDirectory
             return;
         }
 
-        var next = new Dictionary<string, ProxmoxHostSnapshot<ProxmoxGuestStatus>>(_byHost);
+        var next = new Dictionary<string, IntegrationHostSnapshot<ProxmoxGuestStatus>>(_byHost);
         next.Remove(hostId);
         _byHost = next;
     }
