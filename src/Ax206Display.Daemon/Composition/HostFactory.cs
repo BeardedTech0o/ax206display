@@ -53,10 +53,17 @@ public static class HostFactory
         ConfigureServices(builder.Services);
 
         var app = builder.Build();
+
+        // First in the pipeline, ahead of static files and endpoint routing -
+        // gates literally everything (see WebAuthMiddleware's own doc
+        // comment for why that's deliberate and why it's still safe pre-setup).
+        WebAuthMiddleware.Use(app);
+
         app.UseDefaultFiles();
         app.UseStaticFiles();
         WebEndpoints.Map(app);
         IntegrationsEndpoints.Map(app);
+        AuthEndpoints.Map(app);
         return app;
     }
 

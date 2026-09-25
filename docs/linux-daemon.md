@@ -114,6 +114,25 @@ buttons:
 If port 8080 isn't reachable, check the VM's firewall (`ufw`/`nftables`) -
 the systemd unit itself doesn't restrict which interfaces it listens on.
 
+### Setting up a login
+
+**By default the web UI has no password** - anyone who can reach port 8080
+can view and change everything, including adding integration credentials.
+Set one up: **Security** in the header, or `http://<vm-address>:8080/security.html`.
+Once set, every page and API request requires it (standard browser
+username/password prompt - there's no separate login page to bookmark).
+A red banner on the dashboard is a reminder for as long as no password is set.
+
+There's no "forgot password" flow by design - recovering access means
+whoever can already reach the VM's filesystem removes it, not a web form:
+
+```sh
+# Edit /etc/ax206display/config.json, delete the top-level "webAuth" key
+# (leave everything else - devices, widgets, integrations - untouched),
+# then restart the service:
+sudo systemctl restart ax206display-daemon
+```
+
 ### Migrating from the Windows app
 
 The Windows tray app has matching **Export Config...**/**Import Config...**

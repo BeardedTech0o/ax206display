@@ -11,4 +11,7 @@ public sealed record AppConfig
     public List<DeviceProfileConfig> Devices { get; init; } = [];
 
     public List<IntegrationConfig> Integrations { get; init; } = [];
+
+    /// <summary>Null until a password is set for the web UI - see <see cref="WebAuthConfig"/>.</summary>
+    public WebAuthConfig? WebAuth { get; init; }
 }

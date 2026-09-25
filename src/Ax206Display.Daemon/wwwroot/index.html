@@ -92,12 +92,16 @@
   </div>
   <div class="actions">
     <a class="btn" href="/integrations.html" style="background:transparent;color:var(--text);border:1px solid var(--border);">Integrations</a>
+    <a class="btn" href="/security.html" style="background:transparent;color:var(--text);border:1px solid var(--border);">Security</a>
     <a class="btn" href="/api/config/export" download>Export Config</a>
     <input id="importFile" type="file" accept=".zip" />
     <button id="importButton">Import Config</button>
   </div>
 </header>
 <main>
+  <div id="authBanner" style="display:none; background:rgba(242,139,130,0.12); color:#f28b82; border:1px solid rgba(242,139,130,0.3); border-radius:8px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.85rem;">
+    No password is set - this dashboard is open to anyone who can reach it. <a href="/security.html" style="color:inherit; font-weight:600;">Set one up &rarr;</a>
+  </div>
   <div id="grid" class="grid"></div>
   <div id="importStatus"></div>
 </main>
@@ -173,6 +177,17 @@
     }
   });
 
+  async function checkAuthBanner() {
+    try {
+      const res = await fetch('/api/auth/status');
+      const body = await res.json();
+      document.getElementById('authBanner').style.display = body.configured ? 'none' : 'block';
+    } catch {
+      // Non-critical - just skip showing the banner if the check itself fails.
+    }
+  }
+
+  checkAuthBanner();
   loadDevices();
   setInterval(refreshPreviews, REFRESH_INTERVAL_MS);
   setInterval(loadDevices, 15000);
