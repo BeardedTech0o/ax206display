@@ -21,33 +21,34 @@ citations, and known gaps.
 
 ## Download
 
-**Raspberry Pi / Linux:** grab `ax206display-*-linux-arm64.tar.gz` (64-bit
-Raspberry Pi OS), `-linux-arm` (32-bit) or `-linux-x64` from the
-[Releases page](https://github.com/BeardedTech0o/ax206display/releases),
-unpack it and run `sudo ./install.sh`. Full walkthrough in
+Everything is on the [Releases page](https://github.com/BeardedTech0o/ax206display/releases).
+Every release has a Windows and a Linux version. Neither needs .NET installed
+separately.
+
+| You're running | Download | Then |
+|---|---|---|
+| Windows 10/11 (install it) | `Ax206Display-<version>-win-x64.msi` | Run it. Adds a Start Menu shortcut and upgrades cleanly next time. |
+| Windows 10/11 (portable) | `Ax206Display-<version>-win-x64.zip` | Unzip and run `Ax206Display.exe`. Keep `libusb-1.0.dll` next to it. |
+| Raspberry Pi OS 64-bit (Pi 3, 4, 5, Zero 2 W) | `ax206display-<version>-linux-arm64.tar.gz` | Unpack and run `sudo ./install.sh`. |
+| Raspberry Pi OS 32-bit | `ax206display-<version>-linux-arm.tar.gz` | Same as above. |
+| Other Linux PC (x64) | `ax206display-<version>-linux-x64.tar.gz` | Same as above. |
+
+Not sure which Pi build? Run `dpkg --print-architecture` on the Pi: `arm64`
+means the 64-bit one, `armhf` the 32-bit one. Each file has a matching
+`.sha256` checksum.
+
+The Pi setup, from a blank SD card to a working screen, is in
 [`docs/raspberry-pi.md`](docs/raspberry-pi.md).
-
-**Windows:** prebuilt Windows builds are published on the
-[Releases page](https://github.com/BeardedTech0o/ax206display/releases) - no
-separate .NET install required either way:
-
-- `Ax206Display-*-win-x64.msi` - the installer (recommended): adds a Start
-  Menu shortcut and an Add/Remove Programs entry, and cleanly replaces the
-  previous version on your next update instead of you hand-swapping exes.
-- `Ax206Display-*-win-x64.zip` - the same app as a portable exe, for running
-  without installing anything. It's a zip rather than a bare exe because
-  Ax206Display.exe needs its bundled libusb-1.0.dll sitting right next to
-  it - keep both files together wherever you unzip it.
 
 ## Status
 
-Currently at the **M1 scaffold** milestone: solution structure, the USB
-protocol layer, a mock transport for hardware-free development/testing, and a
-minimal tray app that renders a live clock widget end-to-end through the real
-compositor. The widget designer, multi-device widget persistence, and the
-UniFi/Proxmox/weather widgets themselves are future milestones - the
-underlying data-source clients already exist and are unit tested, but aren't
-yet wired into a widget UI. 
+The Windows app has shipped since v1.0.0: multiple displays, the Widget
+Designer, clock, text, stat and gauge widgets, backgrounds, and Pi-hole,
+UniFi and Proxmox integrations.
+
+The Linux/Raspberry Pi service is new in v1.1.0. It covers the same widgets
+and integrations through a web UI and has been tested under emulation and in
+CI, but not yet on a wide range of Pi hardware. Reports welcome.
 
 ## Solution layout
 
@@ -78,15 +79,22 @@ Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 dotnet build Ax206Display.CrossPlatform.slnf
 dotnet test Ax206Display.CrossPlatform.slnf
 
-[![Buy Me a Coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=&slug=nullobj&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff)](https://www.buymeacoffee.com/nullobj)
-
 # Everything, including the WPF app (Windows only):
 dotnet build Ax206Display.sln
+
+# A Linux release tarball (any OS with the SDK; cross-builds for ARM fine):
+packaging/linux/build-release.sh linux-arm64 1.0.0
 ```
 
 CI (`.github/workflows/ci.yml`) mirrors this split: a Linux job builds and
-tests the cross-platform projects, and a `windows-latest` job builds the full
-solution including the WPF app.
+tests the cross-platform projects and test-publishes the Raspberry Pi
+tarball, and a `windows-latest` job builds the full solution including the
+WPF app.
+
+Releases come from `.github/workflows/release.yml`. Run it from the Actions
+tab with a tag like `v1.2.0` (or push that tag): it builds the signed Windows
+MSI and zip, then the three Linux tarballs, and attaches all of them to one
+GitHub release.
 
 ## Security
 
@@ -97,8 +105,8 @@ certs on a LAN. Secrets are DPAPI-encrypted at rest on Windows and
 AES-256-GCM-encrypted with an owner-only key file on Linux
 (`Ax206Display.Config.Secrets`), and their in-memory buffers are zeroed after
 use. The Linux service's web login, sandboxing and network exposure are
-covered in [`docs/raspberry-pi.md`](docs/raspberry-pi.md#security-notes). The app currently runs
-elevated (`requireAdministrator`) for USB/Task Scheduler access; see
+covered in [`docs/raspberry-pi.md`](docs/raspberry-pi.md#security-notes).
+The Windows app currently runs elevated (`requireAdministrator`) for USB/Task Scheduler access; see
 [`docs/privilege-separation.md`](docs/privilege-separation.md) for a proposed
 design to shrink that to a minimal elevated broker process in a future
 milestone.
