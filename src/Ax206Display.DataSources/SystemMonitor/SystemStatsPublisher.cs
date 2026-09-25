@@ -18,6 +18,7 @@ public static class SystemStatsPublisher
         PublishOne(SystemStatKeys.CpuLoadPercent, snapshot.CpuLoadPercent, publish, remove);
         PublishOne(SystemStatKeys.CpuTemperatureCelsius, snapshot.CpuTemperatureCelsius, publish, remove);
         PublishOne(SystemStatKeys.MemoryUsedPercent, snapshot.MemoryUsedPercent, publish, remove);
+        PublishOne(SystemStatKeys.DiskUsedPercent, snapshot.DiskUsedPercent, publish, remove);
         PublishOne(SystemStatKeys.GpuLoadPercent, snapshot.GpuLoadPercent, publish, remove);
         PublishOne(SystemStatKeys.GpuTemperatureCelsius, snapshot.GpuTemperatureCelsius, publish, remove);
     }

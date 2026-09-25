@@ -11,6 +11,7 @@ public static class SystemStatKeys
     public const string CpuLoadPercent = "system.cpu.load";
     public const string CpuTemperatureCelsius = "system.cpu.temp";
     public const string MemoryUsedPercent = "system.memory.used";
+    public const string DiskUsedPercent = "system.disk.used";
     public const string GpuLoadPercent = "system.gpu.load";
     public const string GpuTemperatureCelsius = "system.gpu.temp";
 }

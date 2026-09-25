@@ -66,6 +66,7 @@ public static class HostFactory
         IntegrationsEndpoints.Map(app);
         AuthEndpoints.Map(app);
         StatKeysEndpoints.Map(app);
+        MetricsEndpoints.Map(app);
         return app;
     }
 

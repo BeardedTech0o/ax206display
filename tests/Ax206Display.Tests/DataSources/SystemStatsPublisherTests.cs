@@ -14,6 +14,7 @@ public class SystemStatsPublisherTests
             CpuLoadPercent = 42.5,
             CpuTemperatureCelsius = 61.0,
             MemoryUsedPercent = 70.1,
+            DiskUsedPercent = 93.5,
             GpuLoadPercent = 15.0,
             GpuTemperatureCelsius = 48.0,
         };
@@ -24,6 +25,7 @@ public class SystemStatsPublisherTests
         Assert.Equal(42.5, data[SystemStatKeys.CpuLoadPercent]);
         Assert.Equal(61.0, data[SystemStatKeys.CpuTemperatureCelsius]);
         Assert.Equal(70.1, data[SystemStatKeys.MemoryUsedPercent]);
+        Assert.Equal(93.5, data[SystemStatKeys.DiskUsedPercent]);
         Assert.Equal(15.0, data[SystemStatKeys.GpuLoadPercent]);
         Assert.Equal(48.0, data[SystemStatKeys.GpuTemperatureCelsius]);
     }

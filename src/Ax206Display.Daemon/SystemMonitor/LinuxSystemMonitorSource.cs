@@ -13,14 +13,17 @@ namespace Ax206Display.Daemon.SystemMonitor;
 /// VMs, including a Proxmox guest - falls back to null, same as a sensor a
 /// physical box doesn't have), and memory from /proc/meminfo's
 /// MemAvailable/MemTotal (matches what `free` reports, unlike the
-/// naive MemFree calculation). GPU stats are left null: there's no
-/// dependency-free way to read them for an arbitrary GPU vendor on Linux.
+/// naive MemFree calculation), and disk usage from the root filesystem via
+/// the BCL's own DriveInfo (cross-platform, no /proc parsing needed). GPU
+/// stats are left null: there's no dependency-free way to read them for an
+/// arbitrary GPU vendor on Linux.
 /// </summary>
 public sealed class LinuxSystemMonitorSource : ISystemMonitorSource
 {
     private const string ProcStatPath = "/proc/stat";
     private const string ProcMemInfoPath = "/proc/meminfo";
     private const string ThermalZoneGlobPath = "/sys/class/thermal";
+    private const string RootFileSystemPath = "/";
 
     private (long IdleJiffies, long TotalJiffies)? _previousCpuSample;
 
@@ -31,6 +34,7 @@ public sealed class LinuxSystemMonitorSource : ISystemMonitorSource
             CpuLoadPercent = TryReadCpuLoadPercent(),
             CpuTemperatureCelsius = TryReadCpuTemperatureCelsius(),
             MemoryUsedPercent = TryReadMemoryUsedPercent(),
+            DiskUsedPercent = TryReadDiskUsedPercent(),
         };
     }
 
@@ -147,6 +151,24 @@ public sealed class LinuxSystemMonitorSource : ISystemMonitorSource
             return 100.0 * (1.0 - ((double)memAvailableKb / memTotalKb.Value));
         }
         catch (IOException)
+        {
+            return null;
+        }
+    }
+
+    private static double? TryReadDiskUsedPercent()
+    {
+        try
+        {
+            var drive = new DriveInfo(RootFileSystemPath);
+            if (!drive.IsReady || drive.TotalSize <= 0)
+            {
+                return null;
+            }
+
+            return 100.0 * (1.0 - ((double)drive.AvailableFreeSpace / drive.TotalSize));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             return null;
         }

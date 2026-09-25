@@ -8,6 +8,7 @@ public sealed class MockSystemMonitorSource : ISystemMonitorSource
         CpuLoadPercent = 42,
         CpuTemperatureCelsius = 55,
         MemoryUsedPercent = 61,
+        DiskUsedPercent = 74,
         GpuLoadPercent = 30,
         GpuTemperatureCelsius = 48,
     };
