@@ -221,13 +221,29 @@ public class DeviceDisplayLoopTests
         var secondLoop = new DeviceDisplayLoop(second, [new WidgetPlacement(new FlippingWidget("b", 10, 8), 0, 0, ZOrder: 0)], TimeSpan.FromMilliseconds(5), transferGate: gate);
 
         using var cts = new CancellationTokenSource();
-        var tasks = new[] { firstLoop.RunAsync(cts.Token), secondLoop.RunAsync(cts.Token) };
+        var tasks = new[] { RunUntilCancelledAsync(firstLoop, cts.Token), RunUntilCancelledAsync(secondLoop, cts.Token) };
         await Task.Delay(400);
         cts.Cancel();
         await Task.WhenAll(tasks);
 
         Assert.True(first.Transfers > 2 && second.Transfers > 2, "Both screens should still get their frames.");
         Assert.Equal(1, OverlapTrackingTransport.MaxConcurrent(first, second));
+    }
+
+    /// <summary>
+    /// A loop cancelled while it waits its turn at the gate (or mid-transfer)
+    /// throws OperationCanceledException, which the display manager already
+    /// treats as an ordinary shutdown - so the test does too.
+    /// </summary>
+    private static async Task RunUntilCancelledAsync(DeviceDisplayLoop loop, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await loop.RunAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     /// <summary>Draws a different color every render, so every frame differs from the last.</summary>
