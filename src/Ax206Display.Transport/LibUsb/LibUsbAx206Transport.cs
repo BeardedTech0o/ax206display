@@ -90,13 +90,13 @@ public sealed class LibUsbAx206Transport : IAx206Transport
             else if (expectedInLength > 0)
             {
                 var buffer = new byte[Math.Max(expectedInLength, MinimumReadBufferLength)];
-                var (readError, readCount) = await _reader.ReadAsync(buffer, _timeoutMs);
+                var (readError, readCount) = await ReadWithRetryAsync(buffer);
                 ThrowIfFailed(readError, "reading the data phase");
                 dataIn = readCount == buffer.Length ? buffer : buffer[..readCount];
             }
 
             var cswBuffer = new byte[Math.Max(BulkOnlyTransport.CommandStatusWrapperLength, MinimumReadBufferLength)];
-            var (cswError, cswRead) = await _reader.ReadAsync(cswBuffer, _timeoutMs);
+            var (cswError, cswRead) = await ReadWithRetryAsync(cswBuffer);
             ThrowIfFailed(cswError, "reading the command status");
 
             var csw = CommandStatusWrapper.Parse(cswBuffer.AsSpan(0, cswRead));
@@ -112,6 +112,23 @@ public sealed class LibUsbAx206Transport : IAx206Transport
             _ioLock.Release();
         }
     }
+
+    /// <summary>
+    /// A reply the host asks for but doesn't get in time is not proof the
+    /// panel is gone: it keeps the reply buffered until an IN request collects
+    /// it, and on a Pi sharing one USB controller between several screens and
+    /// the network chip, a single request is sometimes simply never completed.
+    /// So a timed-out read is asked for once more before the screen is written
+    /// off. Writes are never retried: a timed-out write may be half sent.
+    /// </summary>
+    private Task<(Error Error, int Count)> ReadWithRetryAsync(byte[] buffer) =>
+        TransferRetry.RetryOnceAsync<(Error Error, int Count)>(
+            async () =>
+            {
+                var (error, count) = await _reader.ReadAsync(buffer, _timeoutMs);
+                return (error, count);
+            },
+            result => result.Error == Error.Timeout);
 
     private static void ThrowIfFailed(Error error, string phase)
     {
