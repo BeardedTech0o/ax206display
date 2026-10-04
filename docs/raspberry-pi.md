@@ -63,6 +63,12 @@ connected and running. Pick one and you get the layout editor:
 Plugged in a new panel? Press **Scan USB**. It gets a default clock-and-stats
 layout straight away.
 
+**On your phone or desktop.** The page works as an installable app, with its own
+icon and no browser bars. On an iPhone, open it in Safari and use **Share, Add to
+Home Screen**. Chrome only offers a proper install over HTTPS, so on a plain
+`http://` address it usually adds a shortcut instead. Put the page behind a
+reverse proxy with HTTPS (see Security notes) if you want the full install.
+
 **Integrations** sets up Pi-hole, Proxmox and UniFi. Each one is tested
 against the live service before it's saved. For a self-signed HTTPS
 certificate, press **Detect**, check the fingerprint matches what your server

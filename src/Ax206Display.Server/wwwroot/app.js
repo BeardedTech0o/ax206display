@@ -126,6 +126,7 @@ function syncThemeButton() {
 $('#theme-toggle').addEventListener('click', () => {
   const next = currentTheme() === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'dark' ? '#0a0a0a' : '#ffffff');
   try { localStorage.setItem('ax206-theme', next); } catch { /* storage blocked: the choice just won't persist */ }
   syncThemeButton();
 });

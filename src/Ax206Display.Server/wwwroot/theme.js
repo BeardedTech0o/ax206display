@@ -8,4 +8,8 @@
     theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
   document.documentElement.setAttribute('data-theme', theme);
+
+  // The browser (or installed app) title bar follows the page, not the OS.
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'dark' ? '#0a0a0a' : '#ffffff');
 })();

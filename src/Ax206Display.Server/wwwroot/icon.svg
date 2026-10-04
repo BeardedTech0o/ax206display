@@ -1,12 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <style>
-    .s { fill: none; stroke: #0a0a0a; stroke-width: 2; }
-    .f { fill: #0a0a0a; }
-    @media (prefers-color-scheme: dark) { .s { stroke: #f4f4f4; } .f { fill: #f4f4f4; } }
-  </style>
-  <rect class="s" x="2" y="5" width="28" height="19" rx="3"/>
-  <rect class="f" x="6" y="9" width="9" height="4" rx="1"/>
-  <rect class="f" x="6" y="15" width="14" height="5" rx="1"/>
-  <circle class="s" cx="23" cy="13" r="3"/>
-  <rect class="f" x="12" y="25" width="8" height="3" rx="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="190" fill="#0a0a0a"/>
+  <circle cx="512" cy="512" r="296" fill="#f4f4f4"/>
+  <rect x="358" y="400" width="308" height="224" rx="28" fill="#0a0a0a"/>
+  <rect x="428" y="427" width="168" height="169" rx="3" fill="#f4f4f4"/>
 </svg>
