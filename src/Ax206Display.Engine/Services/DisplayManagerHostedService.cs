@@ -34,6 +34,10 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
     private readonly IRenderDataProvider _dataProvider;
     private readonly ILogger<DisplayManagerHostedService> _logger;
     private readonly SemaphoreSlim _discoveryLock = new(1, 1);
+
+    // Shared by every display loop so only one screen is mid-transfer at a
+    // time - see DeviceDisplayLoop's transfer gate.
+    private readonly SemaphoreSlim _transferGate = new(1, 1);
     private readonly List<Task> _loopTasks = [];
 
     // Concurrent: written and removed by each device's own
@@ -301,7 +305,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
                     _backgroundImagePathsByDeviceId[deviceId] = profile.BackgroundImagePath;
                     _brightnessByDeviceId[deviceId] = profile.Brightness;
 
-                    var loop = new DeviceDisplayLoop(transport, placements, ComputeInterval(profile.TargetFps), _dataProvider, backgroundImage);
+                    var loop = new DeviceDisplayLoop(transport, placements, ComputeInterval(profile.TargetFps), _dataProvider, backgroundImage, transferGate: _transferGate);
                     _loopsByDeviceId[deviceId] = loop;
 
                     await loop.SetBrightnessAsync(profile.Brightness, cancellationToken);
@@ -548,6 +552,7 @@ public sealed partial class DisplayManagerHostedService : IHostedService, IDispo
     {
         _loopCancellation?.Dispose();
         _discoveryLock.Dispose();
+        _transferGate.Dispose();
     }
 
     private static async Task<DeviceProfileConfig> ProvisionDefaultProfileAsync(IAx206Transport transport, CancellationToken cancellationToken)

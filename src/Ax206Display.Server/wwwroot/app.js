@@ -113,11 +113,31 @@ $('#logout').addEventListener('click', async () => {
   showLogin();
 });
 
+// ---------------------------------------------------------------- theme
+
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+}
+
+function syncThemeButton() {
+  $('#theme-toggle').textContent = currentTheme() === 'dark' ? 'Light mode' : 'Dark mode';
+}
+
+$('#theme-toggle').addEventListener('click', () => {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'dark' ? '#0a0a0a' : '#ffffff');
+  try { localStorage.setItem('ax206-theme', next); } catch { /* storage blocked: the choice just won't persist */ }
+  syncThemeButton();
+});
+syncThemeButton();
+
 // ---------------------------------------------------------------- navigation
 
 for (const tab of document.querySelectorAll('.tab')) {
   tab.addEventListener('click', () => {
     for (const other of document.querySelectorAll('.tab')) other.classList.toggle('active', other === tab);
+    window.scrollTo(0, 0);
     for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== 'view-' + tab.dataset.view;
     if (tab.dataset.view === 'integrations') renderIntegrations();
     if (tab.dataset.view === 'settings') loadStatus();
@@ -134,7 +154,7 @@ window.addEventListener('beforeunload', event => {
 async function loadCatalog() {
   state.catalog = await api('GET', '/catalog');
   $('#add-buttons').replaceChildren(...state.catalog.types.map(t =>
-    h('button', { type: 'button', class: 'small', onclick: () => addWidget(t.type) }, '+ ' + t.displayName)));
+    h('button', { type: 'button', class: 'btn small', onclick: () => addWidget(t.type) }, '+ ' + t.displayName)));
 }
 
 async function loadStatus() {
@@ -156,10 +176,17 @@ async function loadDevices() {
 
 function renderDeviceList() {
   $('#no-devices').hidden = state.devices.length > 0;
+  $('#workspace').hidden = !current();
   $('#devices').replaceChildren(...state.devices.map(d => h('li', {},
-    h('button', { type: 'button', class: d.id === state.deviceId ? 'active' : '', onclick: () => selectDevice(d.id) },
-      h('span', { class: 'device-name' }, h('span', { class: 'dot' + (d.connected ? ' on' : ''), title: d.connected ? 'Connected' : 'Not connected' }), d.name),
-      h('span', { class: 'device-meta' }, `${d.screenWidth}×${d.screenHeight} · ${d.connected ? 'connected' : 'offline'}`)))));
+    h('button', {
+      type: 'button', class: 'btn dev' + (d.id === state.deviceId ? ' btn-primary' : ''), onclick: () => selectDevice(d.id),
+      title: d.connected ? 'Connected' : 'Not connected',
+    },
+    h('span', { class: 'status-dot', 'data-status': d.connected ? 'ok' : 'idle' }),
+    d.name,
+    h('span', { class: 'meta' }, `${d.screenWidth}×${d.screenHeight}${d.connected ? '' : ' · offline'}`)))));
+  const connected = state.devices.filter(d => d.connected).length;
+  $('#dateline-count').textContent = state.devices.length ? `${connected} of ${state.devices.length} connected` : 'No displays yet';
 }
 
 function selectDevice(id) {
@@ -215,8 +242,7 @@ setInterval(async () => {
 
 function renderEditor() {
   const device = current();
-  $('#editor').hidden = !device;
-  $('#inspector').hidden = !device;
+  $('#workspace').hidden = !device;
   if (!device) return;
   layoutStage();
   renderOverlays();
@@ -247,7 +273,7 @@ function renderOverlays() {
       const box = h('div', {
         class: 'widget-box' + (widget.id === state.selectedId ? ' selected' : ''),
         dataset: { id: widget.id },
-      }, h('span', { class: 'tag' }, describeWidget(widget)), h('span', { class: 'handle' }));
+      }, h('span', { class: 'wtag' }, describeWidget(widget)), h('span', { class: 'handle' }));
       positionBox(box, widget);
       box.addEventListener('pointerdown', event => startDrag(event, widget, event.target.classList.contains('handle')));
       return box;
@@ -499,7 +525,7 @@ function setSetting(widget, key, value) {
   widget.settings ??= {};
   if (value === null || value === undefined || value === '') delete widget.settings[key];
   else widget.settings[key] = value;
-  const box = document.querySelector(`.widget-box[data-id="${CSS.escape(widget.id)}"] .tag`);
+  const box = document.querySelector(`.widget-box[data-id="${CSS.escape(widget.id)}"] .wtag`);
   if (box) box.textContent = describeWidget(widget);
   changed();
 }
@@ -638,9 +664,9 @@ function renderWidgetPanel() {
     field('H', geometryInput(widget, 'height', 1))));
 
   parts.push(h('div', { class: 'row' },
-    h('button', { type: 'button', class: 'small', onclick: () => restack(widget, 1) }, 'Bring forward'),
-    h('button', { type: 'button', class: 'small', onclick: () => restack(widget, -1) }, 'Send back'),
-    h('button', { type: 'button', class: 'small danger', onclick: deleteSelected }, 'Delete')));
+    h('button', { type: 'button', class: 'btn small', onclick: () => restack(widget, 1) }, 'Bring forward'),
+    h('button', { type: 'button', class: 'btn small', onclick: () => restack(widget, -1) }, 'Send back'),
+    h('button', { type: 'button', class: 'btn small danger', onclick: deleteSelected }, 'Delete')));
 
   panel.replaceChildren(h('section', {}, parts));
   updateValueHint();
@@ -690,9 +716,9 @@ function renderDevicePanel() {
     h('label', {}, 'Background image'),
     h('div', { class: 'row' },
       upload,
-      h('button', { type: 'button', class: 'small', onclick: () => upload.click() }, device.hasBackgroundImage ? 'Replace…' : 'Upload…'),
+      h('button', { type: 'button', class: 'btn small', onclick: () => upload.click() }, device.hasBackgroundImage ? 'Replace…' : 'Upload…'),
       device.hasBackgroundImage ? h('button', {
-        type: 'button', class: 'small danger', onclick: async () => {
+        type: 'button', class: 'btn small danger', onclick: async () => {
           await api('DELETE', `/devices/${encodeURIComponent(device.id)}/background`);
           device.hasBackgroundImage = false;
           renderDevicePanel();
@@ -702,7 +728,7 @@ function renderDevicePanel() {
     h('p', { class: 'muted small' }, `Scaled to ${device.screenWidth}×${device.screenHeight} on upload.`),
     h('p', { class: 'muted small' }, 'ID: ', h('code', {}, device.id)),
     device.connected ? null : h('div', { class: 'row' }, h('button', {
-      type: 'button', class: 'small danger', onclick: async () => {
+      type: 'button', class: 'btn small danger', onclick: async () => {
         if (!confirm(`Forget "${device.name}"? Its layout is deleted. If you plug it back in it starts over with the default layout.`)) return;
         await api('DELETE', '/devices/' + encodeURIComponent(device.id));
         state.draft = null;
@@ -788,7 +814,7 @@ function integrationCard(def, existing) {
     : inputs.baseUrl.value.trim();
 
   const detect = h('button', {
-    type: 'button', class: 'small', onclick: async () => {
+    type: 'button', class: 'btn small', onclick: async () => {
       setStatus('Fetching certificate…');
       try {
         const result = await api('POST', '/integrations/detect-certificate', { baseUrl: baseUrlForDetect() });
@@ -824,14 +850,14 @@ function integrationCard(def, existing) {
       }
     },
   },
-  h('div', { class: 'card-head' }, h('h3', {}, def.title), h('span', { class: 'badge' + (existing ? ' ok' : '') }, existing ? 'Configured' : 'Not set up')),
+  h('div', { class: 'card-head' }, h('h3', {}, def.title), h('span', { class: 'tag' + (existing ? ' tag-accent' : '') }, existing ? 'Configured' : 'Not set up')),
   h('p', { class: 'muted small' }, def.note),
   h('div', { class: 'grid2' }, fieldEls),
   h('div', { class: 'thumb-row' }, field('Pinned certificate (SHA-256)', thumbprint), detect),
   h('div', { class: 'row' },
-    h('button', { type: 'submit', class: 'primary' }, 'Test & save'),
+    h('button', { type: 'submit', class: 'btn btn-primary' }, 'Test & save'),
     existing ? h('button', {
-      type: 'button', class: 'danger', onclick: async () => {
+      type: 'button', class: 'btn danger', onclick: async () => {
         if (!confirm(`Remove the ${def.title} integration and its saved password?`)) return;
         await api('DELETE', '/integrations/' + def.kind);
         renderIntegrations();

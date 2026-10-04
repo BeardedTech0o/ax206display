@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Ax206Display.Protocol.Commands;
 using Ax206Display.Rendering.Compositing;
 using Ax206Display.Rendering.PixelFormats;
@@ -18,12 +19,23 @@ public sealed partial class DeviceDisplayLoop
 {
     private static readonly IReadOnlyDictionary<string, object> EmptyData = new Dictionary<string, object>();
 
+    /// <summary>
+    /// How long an unchanged picture is left alone before it's sent again
+    /// anyway. A panel keeps showing what it was last given, so re-sending
+    /// identical pixels only costs USB time - but a panel that reset itself
+    /// without the host noticing would otherwise sit on its splash screen
+    /// until the layout next changed.
+    /// </summary>
+    public static readonly TimeSpan DefaultKeepAliveInterval = TimeSpan.FromSeconds(30);
+
     private readonly IAx206Transport _transport;
     private IReadOnlyList<WidgetPlacement> _placements;
     private SKBitmap? _backgroundImage;
     private readonly TimeSpan _interval;
     private readonly IRenderDataProvider? _dataProvider;
     private readonly ILogger<DeviceDisplayLoop> _logger;
+    private readonly SemaphoreSlim? _transferGate;
+    private readonly TimeSpan _keepAliveInterval;
 
     public DeviceDisplayLoop(
         IAx206Transport transport,
@@ -31,7 +43,9 @@ public sealed partial class DeviceDisplayLoop
         TimeSpan interval,
         IRenderDataProvider? dataProvider = null,
         SKBitmap? backgroundImage = null,
-        ILogger<DeviceDisplayLoop>? logger = null)
+        ILogger<DeviceDisplayLoop>? logger = null,
+        SemaphoreSlim? transferGate = null,
+        TimeSpan? keepAliveInterval = null)
     {
         _transport = transport;
         _placements = placements;
@@ -39,6 +53,8 @@ public sealed partial class DeviceDisplayLoop
         _dataProvider = dataProvider;
         _backgroundImage = backgroundImage;
         _logger = logger ?? NullLogger<DeviceDisplayLoop>.Instance;
+        _transferGate = transferGate;
+        _keepAliveInterval = keepAliveInterval ?? DefaultKeepAliveInterval;
     }
 
     /// <summary>
@@ -80,6 +96,9 @@ public sealed partial class DeviceDisplayLoop
 
         var compositor = new FrameCompositor(parameters.Width, parameters.Height);
 
+        byte[]? lastSent = null;
+        long lastSentAt = 0;
+
         while (!cancellationToken.IsCancellationRequested)
         {
             var context = new WidgetRenderContext
@@ -91,7 +110,21 @@ public sealed partial class DeviceDisplayLoop
             using (var frame = compositor.ComposeFrame(Volatile.Read(ref _placements), context, Volatile.Read(ref _backgroundImage)))
             {
                 var pixels = FrameBufferExtractor.ToRgb565Bytes(frame, swapBytes: true);
-                await _transport.BlitAsync(0, 0, parameters.Width, parameters.Height, pixels, cancellationToken);
+
+                // A full frame is ~300 KB over a 12 Mbit/s link, and a Pi
+                // shares one USB controller between every screen and the
+                // network chip. Don't spend that on a picture the panel is
+                // already showing.
+                var unchanged = lastSent is not null
+                    && pixels.AsSpan().SequenceEqual(lastSent)
+                    && Stopwatch.GetElapsedTime(lastSentAt) < _keepAliveInterval;
+
+                if (!unchanged)
+                {
+                    await BlitFrameAsync(parameters.Width, parameters.Height, pixels, cancellationToken);
+                    lastSent = pixels;
+                    lastSentAt = Stopwatch.GetTimestamp();
+                }
             }
 
             try
@@ -105,6 +138,30 @@ public sealed partial class DeviceDisplayLoop
         }
 
         LogLoopStopped(_transport.DeviceId);
+    }
+
+    /// <summary>
+    /// One transfer at a time across every loop sharing the gate. Without it,
+    /// loops that started together stay in step, so all the screens push a
+    /// full frame in the same instant and starve each other of bus time.
+    /// </summary>
+    private async Task BlitFrameAsync(int width, int height, byte[] pixels, CancellationToken cancellationToken)
+    {
+        if (_transferGate is null)
+        {
+            await _transport.BlitAsync(0, 0, (ushort)width, (ushort)height, pixels, cancellationToken);
+            return;
+        }
+
+        await _transferGate.WaitAsync(cancellationToken);
+        try
+        {
+            await _transport.BlitAsync(0, 0, (ushort)width, (ushort)height, pixels, cancellationToken);
+        }
+        finally
+        {
+            _transferGate.Release();
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Starting display loop for {DeviceId} at {Width}x{Height}.")]

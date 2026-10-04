@@ -20,6 +20,18 @@ public sealed class LibUsbAx206Transport : IAx206Transport
     private readonly SemaphoreSlim _ioLock = new(1, 1);
     private readonly int _timeoutMs;
 
+    // The genuine AX206 chipset replies with exactly as many bytes as a
+    // command's data phase calls for, but at least one common clone (USB ID
+    // 1908:0102, reporting as "GEMIRBD Digital Photo Frame") always pads its
+    // bulk-IN replies out to a full low/full-speed packet. libusb treats a
+    // device sending more bytes than the host's buffer can hold in one
+    // transfer as a hard error (LIBUSB_TRANSFER_OVERFLOW) rather than
+    // silently truncating the way WinUSB does, which is why this only ever
+    // showed up on Linux. Sizing every read buffer to at least one full
+    // packet - regardless of how few bytes the response actually needs -
+    // gives the device room to pad without tripping that check.
+    private const int MinimumReadBufferLength = 64;
+
     public LibUsbAx206Transport(IUsbDevice device, string deviceId, TimeSpan? timeout = null)
     {
         _device = device;
@@ -77,14 +89,14 @@ public sealed class LibUsbAx206Transport : IAx206Transport
             }
             else if (expectedInLength > 0)
             {
-                var buffer = new byte[expectedInLength];
-                var (readError, readCount) = await _reader.ReadAsync(buffer, _timeoutMs);
+                var buffer = new byte[Math.Max(expectedInLength, MinimumReadBufferLength)];
+                var (readError, readCount) = await ReadWithRetryAsync(buffer);
                 ThrowIfFailed(readError, "reading the data phase");
                 dataIn = readCount == buffer.Length ? buffer : buffer[..readCount];
             }
 
-            var cswBuffer = new byte[BulkOnlyTransport.CommandStatusWrapperLength];
-            var (cswError, cswRead) = await _reader.ReadAsync(cswBuffer, _timeoutMs);
+            var cswBuffer = new byte[Math.Max(BulkOnlyTransport.CommandStatusWrapperLength, MinimumReadBufferLength)];
+            var (cswError, cswRead) = await ReadWithRetryAsync(cswBuffer);
             ThrowIfFailed(cswError, "reading the command status");
 
             var csw = CommandStatusWrapper.Parse(cswBuffer.AsSpan(0, cswRead));
@@ -100,6 +112,23 @@ public sealed class LibUsbAx206Transport : IAx206Transport
             _ioLock.Release();
         }
     }
+
+    /// <summary>
+    /// A reply the host asks for but doesn't get in time is not proof the
+    /// panel is gone: it keeps the reply buffered until an IN request collects
+    /// it, and on a Pi sharing one USB controller between several screens and
+    /// the network chip, a single request is sometimes simply never completed.
+    /// So a timed-out read is asked for once more before the screen is written
+    /// off. Writes are never retried: a timed-out write may be half sent.
+    /// </summary>
+    private Task<(Error Error, int Count)> ReadWithRetryAsync(byte[] buffer) =>
+        TransferRetry.RetryOnceAsync<(Error Error, int Count)>(
+            async () =>
+            {
+                var (error, count) = await _reader.ReadAsync(buffer, _timeoutMs);
+                return (error, count);
+            },
+            result => result.Error == Error.Timeout);
 
     private static void ThrowIfFailed(Error error, string phase)
     {

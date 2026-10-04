@@ -63,6 +63,12 @@ connected and running. Pick one and you get the layout editor:
 Plugged in a new panel? Press **Scan USB**. It gets a default clock-and-stats
 layout straight away.
 
+**On your phone or desktop.** The page works as an installable app, with its own
+icon and no browser bars. On an iPhone, open it in Safari and use **Share, Add to
+Home Screen**. Chrome only offers a proper install over HTTPS, so on a plain
+`http://` address it usually adds a shortcut instead. Put the page behind a
+reverse proxy with HTTPS (see Security notes) if you want the full install.
+
 **Integrations** sets up Pi-hole, Proxmox and UniFi. Each one is tested
 against the live service before it's saved. For a self-signed HTTPS
 certificate, press **Detect**, check the fingerprint matches what your server
@@ -133,6 +139,15 @@ Try a powered hub, or lower the brightness.
 **Text looks different from Windows.** Fonts like Segoe UI and Consolas don't
 exist on Linux, so they fall back to DejaVu Sans. Space Mono is bundled and
 looks identical everywhere.
+
+**Screens drop out and reconnect every few minutes.** Check `vcgencmd get_throttled`
+first: anything other than `0x0` means the Pi's power supply is too weak, and
+that needs fixing before anything else. If it's `0x0`, look at the Pi's own log
+with `sudo dmesg | grep -i usb | tail -40`. Screens that vanish together
+(`USB disconnect` on several ports in the same instant) point to the shared USB
+bus rather than one bad cable. The service sends a screen new pixels only when
+the picture changes, and one screen at a time, so a clock showing seconds
+(`HH:mm:ss`) sends far more data than one showing `HH:mm`.
 
 **Trying the UI without a panel.** Run the binary with `AX206_DEMO=1` and it
 pretends two panels (480×320 and 320×480) are plugged in.
