@@ -1,1 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="2" y="5" width="28" height="19" rx="3" fill="#1b2230" stroke="#4da3ff" stroke-width="2"/><rect x="6" y="9" width="9" height="4" rx="1" fill="#4da3ff"/><rect x="6" y="15" width="14" height="5" rx="1" fill="#34c759"/><circle cx="23" cy="13" r="3" fill="none" stroke="#ff9500" stroke-width="2"/><rect x="12" y="25" width="8" height="3" rx="1" fill="#4da3ff"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .s { fill: none; stroke: #0a0a0a; stroke-width: 2; }
+    .f { fill: #0a0a0a; }
+    @media (prefers-color-scheme: dark) { .s { stroke: #f4f4f4; } .f { fill: #f4f4f4; } }
+  </style>
+  <rect class="s" x="2" y="5" width="28" height="19" rx="3"/>
+  <rect class="f" x="6" y="9" width="9" height="4" rx="1"/>
+  <rect class="f" x="6" y="15" width="14" height="5" rx="1"/>
+  <circle class="s" cx="23" cy="13" r="3"/>
+  <rect class="f" x="12" y="25" width="8" height="3" rx="1"/>
+</svg>
