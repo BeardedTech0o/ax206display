@@ -1,3 +1,5 @@
+![ax206display: drive multiple USB AX206 LCD panels on Linux, each running its own widget layout](docs/images/banner.webp)
+
 # ax206display
 
 Drives multiple USB AX206-based LCD screens (the common 3.5" 480x320 "USB
