@@ -19,8 +19,6 @@ reverse-derives it from public reference implementations - see
 [`docs/protocol-spec.md`](docs/protocol-spec.md) for the full write-up,
 citations, and known gaps.
 
-![The Widget Designer, editing a Pi-hole layout across three displays](docs/images/widget-designer.jpg)
-
 ## Download
 
 Everything is on the [Releases page](https://github.com/BeardedTech0o/ax206display/releases).
@@ -51,6 +49,25 @@ UniFi and Proxmox integrations.
 The Linux/Raspberry Pi service is new in v1.1.0. It covers the same widgets
 and integrations through a web UI and has been tested under emulation and in
 CI, but not yet on a wide range of Pi hardware. Reports welcome.
+
+## The web UI (Linux)
+
+Open `http://<your-pi>:8206` from any browser on your network.
+
+**Displays.** One tab per screen, with a green dot when it's connected. Drag
+widgets around the live preview, then press **Save to display**.
+
+![The Displays page: a Pi-hole layout in the editor, with the widget settings on the right](docs/images/web-displays.png)
+
+**Integrations.** Set up Pi-hole, Proxmox and UniFi. Each one is tested against
+the live service before it's saved, and passwords are never sent back to the
+browser.
+
+![The Integrations page, showing Pi-hole and Proxmox VE as configured](docs/images/web-integrations.png)
+
+**Settings.** Change the web password and check which version is running.
+
+![The Settings page: change password, and details about this install](docs/images/web-settings.png)
 
 ## Solution layout
 
