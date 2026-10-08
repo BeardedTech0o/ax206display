@@ -112,7 +112,13 @@ app.Use(async (context, next) =>
 });
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+// No Cache-Control from the default handler leaves browsers free to reuse a
+// stale copy for days. "no-cache" still lets them keep it, but makes them ask
+// first; the ETag turns an unchanged file into a cheap 304.
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "no-cache",
+});
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
