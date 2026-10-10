@@ -121,6 +121,24 @@ jobs:
       - name: Build
         run: dotnet build Ax206Display.sln --configuration Release --no-restore
 
+      # The MSI is otherwise only built by release.yml, so a WiX/SDK
+      # incompatibility (or a Package.wxs mistake) would first show up on
+      # release day. This builds it with placeholder payload files: it proves
+      # the installer project and the SDK work together, not what gets
+      # packaged (release.yml packages the real, signed exe).
+      - name: Build MSI installer (smoke, placeholder payload)
+        shell: pwsh
+        run: |
+          $stub = Join-Path $env:RUNNER_TEMP "msi-stub"
+          New-Item -ItemType Directory -Force -Path $stub | Out-Null
+          Set-Content -Path (Join-Path $stub "Ax206Display.exe") -Value "placeholder"
+          Set-Content -Path (Join-Path $stub "libusb-1.0.dll") -Value "placeholder"
+          dotnet build installer/Ax206Display.Installer.wixproj --configuration Release "-p:AppPublishDir=$stub" -p:ProductVersion=0.0.1
+          if (-not (Get-ChildItem -Path installer/bin -Filter Ax206Display.msi -Recurse)) {
+            Write-Error "The installer build produced no Ax206Display.msi"
+            exit 1
+          }
+
       # No-op until a real code-signing certificate is configured (security
       # audit finding F3 - see AuthenticodeVerifier's doc comment). Once
       # WINDOWS_CODE_SIGNING_PFX_BASE64 and WINDOWS_CODE_SIGNING_PASSWORD are
