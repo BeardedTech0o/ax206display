@@ -39,7 +39,9 @@ public static class IntegrationTargetPolicy
         }
 
         IPAddress[] addresses;
-        if (IPAddress.TryParse(uri.Host.Trim('[', ']'), out var literal))
+        // A trailing dot ("169.254.169.254.") is the same host to a resolver
+        // but not an IP literal to TryParse, so drop it before checking.
+        if (IPAddress.TryParse(uri.Host.Trim('[', ']').TrimEnd('.'), out var literal))
         {
             addresses = [literal];
         }
