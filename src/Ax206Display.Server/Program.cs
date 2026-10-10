@@ -108,6 +108,15 @@ app.Use(async (context, next) =>
     headers.ContentSecurityPolicy = "default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
     headers.XContentTypeOptions = "nosniff";
     headers["Referrer-Policy"] = "no-referrer";
+    headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), usb=()";
+
+    // API answers carry layouts, integration settings and login state; never
+    // let a browser or an intermediary cache them.
+    if (context.Request.Path.StartsWithSegments("/api"))
+    {
+        headers.CacheControl = "no-store";
+    }
+
     await next();
 });
 

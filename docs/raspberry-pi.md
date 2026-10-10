@@ -112,10 +112,19 @@ folder and you've backed up the install.
 - The web UI speaks plain HTTP on port 8206 and is reachable from your LAN.
   Don't forward that port to the internet. For HTTPS, put it behind a
   reverse proxy (Caddy, nginx) and bind the service to localhost with
-  `ASPNETCORE_URLS=http://127.0.0.1:8206`.
+  `ASPNETCORE_URLS=http://127.0.0.1:8206`. Also add
+  `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` to `/etc/default/ax206display`,
+  so the service trusts the proxy's `X-Forwarded-For` and `X-Forwarded-Proto`
+  headers (from localhost only). Without it, every visitor looks like the
+  proxy's address, so the sign-in limit below is shared by everyone, and the
+  login cookie isn't marked Secure even though the browser is on HTTPS.
+  Without a proxy, your password and session cookie cross the network in
+  clear text, so only use the plain-HTTP address on a network you trust.
 - Sign-in is a single password, stored as a salted PBKDF2 hash. Each address
   gets ten sign-in attempts per five minutes. Changing the password signs out
-  every other browser.
+  every other browser. Signing out only clears that browser's cookie; the
+  cookie itself stays valid until it expires (30 days, sliding) or the
+  password changes, so change the password if a browser or device is lost.
 - Integration passwords are encrypted with AES-256-GCM. The key sits in its
   own file readable only by the service account. That stops someone who
   copies `secrets.dat` alone, but not someone with root on the Pi. That's the
