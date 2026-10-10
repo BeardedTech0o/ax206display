@@ -11,6 +11,8 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <Company>ax206display</Company>
     <Product>ax206display</Product>
+    <Copyright>Copyright (c) 2026 BeardedTech0o</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
     <!-- Build hardening (see docs' security-audit follow-up) -->
     <EnableNETAnalyzers>true</EnableNETAnalyzers>

@@ -181,7 +181,7 @@ jobs:
           # would just be a different flavor of the crash this fetches to
           # avoid.
           $zipName = "Ax206Display-$tag-win-x64.zip"
-          Compress-Archive -Path "publish/Ax206Display.exe", "publish/libusb-1.0.dll" -DestinationPath $zipName
+          Compress-Archive -Path "publish/Ax206Display.exe", "publish/libusb-1.0.dll", "LICENSE", "THIRD-PARTY-NOTICES.md" -DestinationPath $zipName
           (Get-FileHash -Path $zipName -Algorithm SHA256).Hash.ToLower() + "  $zipName" | Out-File -FilePath "$zipName.sha256" -Encoding ascii
           "zipName=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 

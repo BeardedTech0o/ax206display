@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      nuget-minor-and-patch:
+        update-types: ["minor", "patch"]
+    # Several packages are deliberately pinned to the last release that
+    # still targets net8.0 (see the comments in Directory.Packages.props).
+    ignore:
+      - dependency-name: "SkiaSharp.Views.WPF"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "H.NotifyIcon.Wpf"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "LibreHardwareMonitorLib"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]

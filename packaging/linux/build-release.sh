@@ -45,6 +45,7 @@ cp "$ROOT/packaging/linux/ax206display.service" \
    "$ROOT/packaging/linux/ax206display-passwd" \
    "$STAGE/system/"
 cp "$ROOT/packaging/linux/install.sh" "$ROOT/packaging/linux/uninstall.sh" "$STAGE/"
+cp "$ROOT/LICENSE" "$ROOT/THIRD-PARTY-NOTICES.md" "$STAGE/"
 chmod 755 "$STAGE/install.sh" "$STAGE/uninstall.sh" "$STAGE/system/ax206display-passwd"
 
 tar -C "$OUT" -czf "$OUT/$NAME.tar.gz" "$NAME"
