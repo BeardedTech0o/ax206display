@@ -35,6 +35,8 @@ public static class DeviceEndpoints
     public const int MinFps = 1;
     public const int MaxFps = 30;
     public const int MaxBackgroundUploadBytes = 20 * 1024 * 1024;
+    private const int MaxImageSide = 16384;
+    private const long MaxImagePixels = 64L * 1024 * 1024;
     private const int MaxWidgets = 200;
     private const int MaxWidgetDimension = 4096;
 
@@ -173,6 +175,23 @@ public static class DeviceEndpoints
             return Results.BadRequest(new { error = "Image is empty or too large (20 MB max)." });
         }
 
+        // Read just the header first. A few KB of PNG can declare tens of
+        // thousands of pixels per side, and decoding that would exhaust a
+        // Pi's memory long before the 20 MB byte cap mattered.
+        using (var data = SKData.CreateCopy(buffer.ToArray()))
+        using (var codec = SKCodec.Create(data))
+        {
+            if (codec is null)
+            {
+                return Results.BadRequest(new { error = "That file isn't an image this server can read (try PNG or JPEG)." });
+            }
+
+            if (!IsAcceptableImageSize(codec.Info.Width, codec.Info.Height))
+            {
+                return Results.BadRequest(new { error = "That image has too many pixels. Use a smaller one (under 64 megapixels)." });
+            }
+        }
+
         buffer.Position = 0;
         using var decoded = SKBitmap.Decode(buffer);
         if (decoded is null)
@@ -210,6 +229,15 @@ public static class DeviceEndpoints
         DeleteIfManaged(paths, previousPath);
         return Results.NoContent();
     }
+
+    /// <summary>
+    /// Whether a declared image size is small enough to decode safely. Generous
+    /// enough for a 48-megapixel phone photo; far below a decompression bomb.
+    /// </summary>
+    public static bool IsAcceptableImageSize(int width, int height) =>
+        width is > 0 and <= MaxImageSide
+        && height is > 0 and <= MaxImageSide
+        && (long)width * height <= MaxImagePixels;
 
     private static async Task<IResult> RemoveBackgroundAsync(string id, ConfigService configService, Ax206DisplayPaths paths, CancellationToken cancellationToken)
     {

@@ -62,8 +62,27 @@ public sealed class SecretStore
             SecureDirectory.EnsureExists(directory);
         }
 
-        await using var stream = File.Create(_filePath);
-        await JsonSerializer.SerializeAsync(stream, snapshot, SerializerOptions, cancellationToken);
+        // Write to a sibling temp file and rename it into place: a crash or
+        // full disk mid-write can't leave a truncated secrets file behind. On
+        // Unix the temp file is created owner-only (0600) regardless of the
+        // process umask, so the encrypted blobs are never briefly (or
+        // permanently, when the binary is started by hand with a 022 umask)
+        // readable by other accounts. Windows relies on the directory ACL.
+        var tempPath = _filePath + ".tmp";
+        File.Delete(tempPath);
+
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        await using (var stream = new FileStream(tempPath, options))
+        {
+            await JsonSerializer.SerializeAsync(stream, snapshot, SerializerOptions, cancellationToken);
+        }
+
+        File.Move(tempPath, _filePath, overwrite: true);
     }
 
     public void SetSecret(string key, string plaintextValue)

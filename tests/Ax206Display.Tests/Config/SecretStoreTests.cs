@@ -57,6 +57,59 @@ public class SecretStoreTests : IDisposable
         Assert.Null(store.GetSecret("temp"));
     }
 
+    [Fact]
+    public async Task SaveAsync_CreatesTheFileOwnerOnlyOnUnix()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return; // Windows relies on the directory ACL instead.
+        }
+
+        var store = new SecretStore(new FakeSecretProtector(), _filePath);
+        store.SetSecret("k", "v");
+        await store.SaveAsync();
+
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(_filePath));
+    }
+
+    [Fact]
+    public async Task SaveAsync_TightensAnExistingWorldReadableFile()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // A file left behind by an older version (or a hand-started run with a
+        // permissive umask).
+        await File.WriteAllTextAsync(_filePath, "{}");
+        File.SetUnixFileMode(_filePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+
+        var store = new SecretStore(new FakeSecretProtector(), _filePath);
+        store.SetSecret("k", "v");
+        await store.SaveAsync();
+
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(_filePath));
+    }
+
+    [Fact]
+    public async Task SaveAsync_LeavesNoTempFileBehindAndSurvivesRepeatedSaves()
+    {
+        var store = new SecretStore(new FakeSecretProtector(), _filePath);
+
+        for (var i = 0; i < 3; i++)
+        {
+            store.SetSecret("k", "v" + i);
+            await store.SaveAsync();
+        }
+
+        Assert.False(File.Exists(_filePath + ".tmp"));
+
+        var reloaded = new SecretStore(new FakeSecretProtector(), _filePath);
+        await reloaded.LoadAsync();
+        Assert.Equal("v2", reloaded.GetSecret("k"));
+    }
+
     public void Dispose()
     {
         Directory.Delete(_tempDirectory, recursive: true);
