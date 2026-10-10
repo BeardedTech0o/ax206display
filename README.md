@@ -73,15 +73,15 @@ browser.
 
 | Project | TFM | Purpose |
 |---|---|---|
-| `Ax206Display.Protocol` | net8.0 | AX206 command/CBW/CSW byte-level protocol, no I/O |
-| `Ax206Display.Transport` | net8.0 | `IAx206Transport` + a mock, a LibUsbDotNet-based transport, and a WinUSB P/Invoke fallback |
-| `Ax206Display.Rendering` | net8.0 | SkiaSharp-based widget compositor and pixel-format conversion |
-| `Ax206Display.DataSources` | net8.0 | System sensors (LibreHardwareMonitorLib on Windows, `/proc` and `/sys` on Linux), Open-Meteo weather, Pi-hole, UniFi, Proxmox clients |
-| `Ax206Display.Config` | net8.0 | JSON config models/service; secret store backed by DPAPI on Windows, an AES-GCM key file elsewhere |
-| `Ax206Display.Engine` | net8.0 | What both front ends share: the device supervisor, data pump services, widget catalog, integration setup, and one DI registration (`AddAx206DisplayCore`) that picks the right platform pieces |
-| `Ax206Display.App` | net8.0-windows | The WPF tray app: tray icon/menu, Task Scheduler auto-start, widget-designer window |
-| `Ax206Display.Server` | net8.0 | The Linux service: ASP.NET Core host with the web UI (`wwwroot`, no build step), cookie login, systemd integration |
-| `Ax206Display.Tests` | net8.0 | xUnit tests for every project above except `App` |
+| `Ax206Display.Protocol` | net10.0 | AX206 command/CBW/CSW byte-level protocol, no I/O |
+| `Ax206Display.Transport` | net10.0 | `IAx206Transport` + a mock, a LibUsbDotNet-based transport, and a WinUSB P/Invoke fallback |
+| `Ax206Display.Rendering` | net10.0 | SkiaSharp-based widget compositor and pixel-format conversion |
+| `Ax206Display.DataSources` | net10.0 | System sensors (LibreHardwareMonitorLib on Windows, `/proc` and `/sys` on Linux), Open-Meteo weather, Pi-hole, UniFi, Proxmox clients |
+| `Ax206Display.Config` | net10.0 | JSON config models/service; secret store backed by DPAPI on Windows, an AES-GCM key file elsewhere |
+| `Ax206Display.Engine` | net10.0 | What both front ends share: the device supervisor, data pump services, widget catalog, integration setup, and one DI registration (`AddAx206DisplayCore`) that picks the right platform pieces |
+| `Ax206Display.App` | net10.0-windows | The WPF tray app: tray icon/menu, Task Scheduler auto-start, widget-designer window |
+| `Ax206Display.Server` | net10.0 | The Linux service: ASP.NET Core host with the web UI (`wwwroot`, no build step), cookie login, systemd integration |
+| `Ax206Display.Tests` | net10.0 | xUnit tests for every project above except `App` |
 
 All USB I/O goes through the `IAx206Transport` interface so
 rendering/config/data-source code is fully testable without hardware (see
@@ -91,7 +91,7 @@ VID/PID: it probes candidate devices with the protocol's own
 
 ## Building
 
-Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 ```sh
 # Everything except the WPF app, including the Linux server (works on Linux/macOS/Windows):

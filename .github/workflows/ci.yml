@@ -29,7 +29,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
 
       # The WPF app (Ax206Display.App) can only be restored/built on Windows,
       # so this job targets a solution filter with everything except it:
@@ -107,7 +107,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
 
       # --locked-mode fails the restore outright if the resolved dependency
       # graph would differ from src/Ax206Display.App/packages.lock.json -
@@ -137,7 +137,7 @@ jobs:
           $pfxPath = Join-Path $env:RUNNER_TEMP "ax206display-signing.pfx"
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_BASE64))
           try {
-            $exePath = "src/Ax206Display.App/bin/Release/net8.0-windows10.0.19041/Ax206Display.exe"
+            $exePath = "src/Ax206Display.App/bin/Release/net10.0-windows10.0.19041/Ax206Display.exe"
             & signtool.exe sign /f $pfxPath /p $env:PFX_PASSWORD `
               /fd sha256 /tr http://timestamp.digicert.com /td sha256 $exePath
           } finally {

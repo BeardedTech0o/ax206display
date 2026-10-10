@@ -222,7 +222,18 @@ public class DeviceDisplayLoopTests
 
         using var cts = new CancellationTokenSource();
         var tasks = new[] { RunUntilCancelledAsync(firstLoop, cts.Token), RunUntilCancelledAsync(secondLoop, cts.Token) };
-        await Task.Delay(400);
+
+        // Wait until both screens have transferred a few frames rather than
+        // sleeping a fixed time: a cold start (JIT, loading Skia's native
+        // library) on a busy machine can eat a short fixed window, and what
+        // this test guards - no two transfers overlapping - doesn't depend on
+        // how fast the loops ran, only on there being enough of them to compare.
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while ((first.Transfers <= 2 || second.Transfers <= 2) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20);
+        }
+
         cts.Cancel();
         await Task.WhenAll(tasks);
 

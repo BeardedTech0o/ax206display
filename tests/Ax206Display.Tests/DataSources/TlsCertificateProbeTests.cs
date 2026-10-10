@@ -43,6 +43,6 @@ public class TlsCertificateProbeTests
         // SslStream's server-side handshake - CreateSelfSigned's in-memory
         // certificate can otherwise have an ephemeral key set that some
         // platforms won't let SslStream use directly.
-        return new X509Certificate2(certificate.Export(X509ContentType.Pfx));
+        return X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx), password: null);
     }
 }

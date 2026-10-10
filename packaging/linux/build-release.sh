@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds a self-contained Linux release tarball: no .NET install needed on
-# the target. Runs on any machine with the .NET 8 SDK (cross-publishing for
+# the target. Runs on any machine with the .NET 10 SDK (cross-publishing for
 # ARM from x64 works fine).
 #
 #   packaging/linux/build-release.sh linux-arm64 [version] [output-dir]

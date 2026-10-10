@@ -61,7 +61,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
 
       # Same dependency-integrity guarantee CI has: fail if the resolved
       # package graph differs from the committed packages.lock.json files.
@@ -264,7 +264,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
 
       # Same gate as the Windows job: the RID-specific publish inside
       # build-release.sh can't use --locked-mode, so verify the graph here.

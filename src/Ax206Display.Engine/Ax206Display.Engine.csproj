@@ -2,12 +2,12 @@
 
   <!--
     The display engine both front ends share: device supervision, the data
-    pump services and their DI wiring. Plain net8.0 so it runs under the
+    pump services and their DI wiring. Plain net10.0 so it runs under the
     Windows tray app and the Linux web server alike - nothing in here may
     touch WPF or any other Windows-only UI stack.
   -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

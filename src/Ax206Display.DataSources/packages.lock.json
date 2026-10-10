@@ -1,7 +1,7 @@
 {
   "version": 2,
   "dependencies": {
-    "net8.0": {
+    "net10.0": {
       "LibreHardwareMonitorLib": {
         "type": "Direct",
         "requested": "[0.9.5, )",
@@ -12,9 +12,9 @@
           "HidSharp": "2.6.4",
           "Mono.Posix.NETStandard": "1.0.0",
           "RAMSPDToolkit-NDD": "1.4.2",
+          "System.IO.FileSystem.AccessControl": "5.0.0",
           "System.IO.Ports": "10.0.1",
-          "System.Management": "10.0.1",
-          "System.Threading.AccessControl": "10.0.1"
+          "System.Management": "10.0.1"
         }
       },
       "BlackSharp.Core": {
@@ -157,6 +157,11 @@
         "resolved": "10.0.1",
         "contentHash": "owy+NlWSBRNLZO8CZ7IguuaPHHiAivjstTciM7YlXyDDqBY26FMl3F9Nw04n8Dog1JaxFlZiEIEXKPaigRmkNg=="
       },
+      "System.IO.FileSystem.AccessControl": {
+        "type": "Transitive",
+        "resolved": "5.0.0",
+        "contentHash": "SxHB3nuNrpptVk+vZ/F+7OHEpoHUIKKMl02bUmYHQr1r+glbZQxs7pRtsf4ENO29TVm2TH3AEeep2fJcy92oYw=="
+      },
       "System.IO.Ports": {
         "type": "Transitive",
         "resolved": "10.0.1",
@@ -173,22 +178,17 @@
           "System.CodeDom": "10.0.1"
         }
       },
-      "System.Threading.AccessControl": {
-        "type": "Transitive",
-        "resolved": "10.0.1",
-        "contentHash": "m8Ww4HdmbDxvIdUerGD2qlfPRvcgBflI077Sb+sFj6w5ux36JBgFCNSZbR8ttEg0ZRdATgeDtL5I/HuFA0+oVQ=="
-      },
       "ax206display.config": {
         "type": "Project",
         "dependencies": {
-          "System.Security.Cryptography.ProtectedData": "[8.0.0, )"
+          "System.Security.Cryptography.ProtectedData": "[10.0.12, )"
         }
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "CentralTransitive",
-        "requested": "[8.0.0, )",
-        "resolved": "8.0.0",
-        "contentHash": "+TUFINV2q2ifyXauQXRwy4CiBhqvDEDZeVJU7qfxya4aRYOKzVBpN+4acx25VcPB9ywUN6C0n8drWl110PhZEg=="
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "wO0W8VDMeRJZakRySOmemAnrBZMwEFRlbfBtATxUiLf2I3IhSRnCp1Vt157NWptdE4IJ7eftd5n8q9LtaKHFTQ=="
       }
     }
   }

@@ -10,7 +10,7 @@ layout format and shows the same widgets and integrations as the Windows app.
 - A Raspberry Pi 3, 4 or 5 (or Zero 2 W) on Raspberry Pi OS Bookworm or
   newer, 64-bit or 32-bit. Other Debian-based distros on arm64, armhf or x64
   work too.
-- The Pi Zero, Zero W and Pi 1 won't work. They're ARMv6, and .NET 8 doesn't
+- The Pi Zero, Zero W and Pi 1 won't work. They're ARMv6, and .NET 10 doesn't
   run there.
 - One or more AX206 USB panels. A powered hub helps if you run several off a
   Pi, since the backlights draw real current.
@@ -163,7 +163,7 @@ pretends two panels (480×320 and 320×480) are plugged in.
 
 ## Building it yourself
 
-You need the .NET 8 SDK on any machine (it doesn't have to be the Pi):
+You need the .NET 10 SDK on any machine (it doesn't have to be the Pi):
 
 ```sh
 packaging/linux/build-release.sh linux-arm64 1.0.0

@@ -1,14 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- DPAPI (System.Security.Cryptography.ProtectedData) is Windows-only at runtime,
-         but the package itself builds on any OS so this project can stay net8.0
+         but the package itself builds on any OS so this project can stay net10.0
          and be exercised by non-Windows unit tests via the IsWindows guard. -->
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
   </ItemGroup>

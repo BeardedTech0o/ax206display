@@ -64,7 +64,7 @@ fi
 BUILD_RID=$(cat "$HERE/app/RID" 2>/dev/null || echo unknown)
 
 if [ "$MACHINE_RID" = unsupported ]; then
-    echo "This is an ARMv6 board (Pi Zero / Pi 1). .NET 8 doesn't run there, sorry." >&2
+    echo "This is an ARMv6 board (Pi Zero / Pi 1). .NET 10 doesn't run there, sorry." >&2
     exit 1
 fi
 if [ "$MACHINE_RID" != unknown ] && [ "$MACHINE_RID" != "$BUILD_RID" ]; then
