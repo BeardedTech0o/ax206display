@@ -14,13 +14,17 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
+# Read-only by default; only the two jobs that create/upload release assets
+# get write access (granted per job below).
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release-windows-exe:
     name: Publish signed Windows release
     runs-on: windows-latest
+    permissions:
+      contents: write
     # `if:` conditions can't reference the secrets context directly (see
     # ci.yml's identical comment on its own signing step) - routed through
     # job-level env: for the same reason.
@@ -28,7 +32,14 @@ jobs:
       HAS_SIGNING_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
+      # Values arrive through env, never pasted into the script: a tag typed
+      # into the dispatch form (or pushed as a git ref) is user input, and a
+      # git ref can legally contain characters PowerShell treats as code.
+      # Everything downstream reads the validated value from this step's
+      # outputs via env too, and only after it has matched the pattern below.
       - name: Resolve release tag
         id: tag
         env:
@@ -37,17 +48,28 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         shell: pwsh
         run: |
-          $tag = if ("$env:EVENT_NAME" -eq "workflow_dispatch") { "$env:INPUT_TAG" } else { "$env:REF_NAME" }
+          $tag = if ($env:EVENT_NAME -eq "workflow_dispatch") { $env:INPUT_TAG } else { $env:REF_NAME }
+          if ($tag -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            Write-Error "Tag must look like v1.2.3, got '$tag'"
+            exit 1
+          }
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           # The MSI Package/@Version needs a bare N.N.N number, not the tag's
-          # leading "v" - tags are required to match "v*.*.*" (see the `on:`
-          # trigger above), so this is always exactly the three-part version.
+          # leading "v".
           "version=$($tag.TrimStart('v'))" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+
+      # Same dependency-integrity guarantee CI has: fail if the resolved
+      # package graph differs from the committed packages.lock.json files.
+      # (The RID-specific publish below can't itself use --locked-mode, since
+      # the lock files have no per-RID section, so this plain restore is the
+      # gate that stops a drifted graph from reaching a release.)
+      - name: Restore (locked mode)
+        run: dotnet restore Ax206Display.sln --locked-mode
 
       # Self-contained + single-file so the download just works: no separate
       # .NET Desktop Runtime install required on the user's machine.
@@ -101,11 +123,14 @@ jobs:
       - name: Sign Ax206Display.exe
         if: ${{ env.HAS_SIGNING_CERT == 'true' }}
         shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}
         run: |
           $pfxPath = Join-Path $env:RUNNER_TEMP "ax206display-signing.pfx"
-          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 }}"))
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_BASE64))
           try {
-            & signtool.exe sign /f $pfxPath /p "${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}" `
+            & signtool.exe sign /f $pfxPath /p $env:PFX_PASSWORD `
               /fd sha256 /tr http://timestamp.digicert.com /td sha256 publish/Ax206Display.exe
           } finally {
             Remove-Item -Path $pfxPath -Force -ErrorAction SilentlyContinue
@@ -121,17 +146,22 @@ jobs:
       # is an ordinary NuGet-restored MSBuild SDK, so `dotnet build` below
       # fetches everything it needs on its own.
       - name: Build MSI installer
-        run: dotnet build installer/Ax206Display.Installer.wixproj --configuration Release -p:ProductVersion=${{ steps.tag.outputs.version }}
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: dotnet build installer/Ax206Display.Installer.wixproj --configuration Release "-p:ProductVersion=$env:VERSION"
 
       - name: Sign Ax206Display.msi
         if: ${{ env.HAS_SIGNING_CERT == 'true' }}
         shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}
         run: |
           $pfxPath = Join-Path $env:RUNNER_TEMP "ax206display-signing.pfx"
-          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 }}"))
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_BASE64))
           try {
             $msiPath = (Get-ChildItem -Path installer/bin -Filter Ax206Display.msi -Recurse | Select-Object -First 1).FullName
-            & signtool.exe sign /f $pfxPath /p "${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}" `
+            & signtool.exe sign /f $pfxPath /p $env:PFX_PASSWORD `
               /fd sha256 /tr http://timestamp.digicert.com /td sha256 $msiPath
           } finally {
             Remove-Item -Path $pfxPath -Force -ErrorAction SilentlyContinue
@@ -140,8 +170,10 @@ jobs:
       - name: Package and checksum the portable zip and installer
         id: asset
         shell: pwsh
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          $tag = "${{ steps.tag.outputs.tag }}"
+          $tag = $env:TAG
 
           # The portable download is a zip (exe + libusb-1.0.dll), not a bare
           # exe: the exe alone can't find libusb-1.0.dll unless it's a
@@ -164,6 +196,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
+          MSI_NAME: ${{ steps.asset.outputs.msiName }}
+          ZIP_NAME: ${{ steps.asset.outputs.zipName }}
         run: |
           # A "which file do I need" table above GitHub's generated
           # changelog. The Linux tarballs it lists are attached by the
@@ -186,10 +220,10 @@ jobs:
           "@ | Out-File -FilePath release-notes.md -Encoding utf8
 
           gh release create $tag `
-            "${{ steps.asset.outputs.msiName }}" `
-            "${{ steps.asset.outputs.msiName }}.sha256" `
-            "${{ steps.asset.outputs.zipName }}" `
-            "${{ steps.asset.outputs.zipName }}.sha256" `
+            $env:MSI_NAME `
+            "$($env:MSI_NAME).sha256" `
+            $env:ZIP_NAME `
+            "$($env:ZIP_NAME).sha256" `
             --title $tag `
             --notes-file release-notes.md `
             --generate-notes
@@ -200,12 +234,16 @@ jobs:
     name: Publish Linux release (${{ matrix.rid }})
     needs: release-windows-exe
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       matrix:
         # arm64 = 64-bit Raspberry Pi OS (Pi 3/4/5), arm = 32-bit Pi OS.
         rid: [linux-arm64, linux-arm, linux-x64]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # Values arrive through env, never pasted into the script: a tag typed
       # into the dispatch form is user input.
@@ -217,16 +255,21 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then tag="$INPUT_TAG"; else tag="$REF_NAME"; fi
-          case "$tag" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "::error::Tag must look like v1.2.3, got '$tag'"; exit 1 ;;
-          esac
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag must look like v1.2.3, got '$tag'"
+            exit 1
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+
+      # Same gate as the Windows job: the RID-specific publish inside
+      # build-release.sh can't use --locked-mode, so verify the graph here.
+      - name: Restore (locked mode)
+        run: dotnet restore Ax206Display.CrossPlatform.slnf --locked-mode
 
       - name: Build tarball
         env:

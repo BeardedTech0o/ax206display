@@ -13,12 +13,18 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
+# Nothing in CI needs to write to the repo.
+permissions:
+  contents: read
+
 jobs:
   linux-build-test:
     name: Linux (build + test cross-platform projects)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -95,6 +101,8 @@ jobs:
       HAS_SIGNING_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -122,12 +130,15 @@ jobs:
       - name: Sign Ax206Display.exe
         if: ${{ github.event_name != 'pull_request' && env.HAS_SIGNING_CERT == 'true' }}
         shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}
         run: |
           $pfxPath = Join-Path $env:RUNNER_TEMP "ax206display-signing.pfx"
-          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 }}"))
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_BASE64))
           try {
             $exePath = "src/Ax206Display.App/bin/Release/net8.0-windows10.0.19041/Ax206Display.exe"
-            & signtool.exe sign /f $pfxPath /p "${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}" `
+            & signtool.exe sign /f $pfxPath /p $env:PFX_PASSWORD `
               /fd sha256 /tr http://timestamp.digicert.com /td sha256 $exePath
           } finally {
             Remove-Item -Path $pfxPath -Force -ErrorAction SilentlyContinue
