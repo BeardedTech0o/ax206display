@@ -159,6 +159,42 @@ public class UniFiClientTests
         Assert.Equal(12, status.Subsystems.Single(s => s.Subsystem == "wlan").NumUser);
     }
 
+    [Fact]
+    public async Task GetSiteHealthAsync_EscapesTheSiteNameSoItCannotChangeTheRequestPath()
+    {
+        string? requestedPath = null;
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            requestedPath = request.RequestUri!.AbsolutePath;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{ "data": [] }""", Encoding.UTF8, "application/json") };
+        });
+        var client = CreateClient(handler);
+
+        await client.GetSiteHealthAsync("../../../api/auth/logout?x=");
+
+        Assert.NotNull(requestedPath);
+        Assert.StartsWith("/proxy/network/api/s/", requestedPath, StringComparison.Ordinal);
+        Assert.EndsWith("/stat/health", requestedPath, StringComparison.Ordinal);
+        Assert.DoesNotContain("..", requestedPath.Split('/'));
+        Assert.DoesNotContain("/logout", requestedPath, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetSiteHealthAsync_LeavesAnOrdinarySiteNameUnchanged()
+    {
+        string? requestedPath = null;
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            requestedPath = request.RequestUri!.AbsolutePath;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{ "data": [] }""", Encoding.UTF8, "application/json") };
+        });
+        var client = CreateClient(handler);
+
+        await client.GetSiteHealthAsync("default");
+
+        Assert.Equal("/proxy/network/api/s/default/stat/health", requestedPath);
+    }
+
     private static UniFiClient CreateClient(FakeHttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://udm.local") };

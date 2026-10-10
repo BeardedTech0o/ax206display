@@ -126,11 +126,12 @@ public sealed class IntegrationSetupService : IDisposable
     /// </summary>
     public static async Task<string?> DetectCertificateThumbprintAsync(string baseUrl, CancellationToken cancellationToken = default)
     {
-        if (!Uri.TryCreate(baseUrl?.Trim(), UriKind.Absolute, out var uri))
+        if (await IntegrationTargetPolicy.CheckAsync(baseUrl, cancellationToken) is { } rejection)
         {
-            throw new FormatException("Enter a valid host URL first.");
+            throw new FormatException(rejection);
         }
 
+        var uri = new Uri(baseUrl!.Trim());
         using var certificate = await TlsCertificateProbe.FetchCertificateAsync(uri.Host, uri.Port, cancellationToken);
         return certificate?.GetCertHashString(HashAlgorithmName.SHA256);
     }
@@ -146,6 +147,11 @@ public sealed class IntegrationSetupService : IDisposable
         if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(username))
         {
             return new IntegrationSetupResult(false, "Host URL and username are required.");
+        }
+
+        if (await IntegrationTargetPolicy.CheckAsync(baseUrl, cancellationToken) is { } rejection)
+        {
+            return new IntegrationSetupResult(false, rejection);
         }
 
         var realm = string.IsNullOrWhiteSpace(request.Realm) ? "pam" : request.Realm.Trim();
@@ -199,6 +205,11 @@ public sealed class IntegrationSetupService : IDisposable
             return new IntegrationSetupResult(false, "Port must be a number between 1 and 65535.");
         }
 
+        if (await IntegrationTargetPolicy.CheckAsync(BuildPiHoleBaseUrl(host, port, request.UseHttps), cancellationToken) is { } rejection)
+        {
+            return new IntegrationSetupResult(false, rejection);
+        }
+
         var existing = await FindExistingAsync(PiHoleKind, cancellationToken);
         var appPassword = await ResolveSecretAsync(request.Secret, existing?.SecretKey, cancellationToken);
         if (string.IsNullOrEmpty(appPassword))
@@ -240,6 +251,11 @@ public sealed class IntegrationSetupService : IDisposable
         if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(username))
         {
             return new IntegrationSetupResult(false, "Host URL and username are required.");
+        }
+
+        if (await IntegrationTargetPolicy.CheckAsync(baseUrl, cancellationToken) is { } rejection)
+        {
+            return new IntegrationSetupResult(false, rejection);
         }
 
         var site = string.IsNullOrWhiteSpace(request.Site) ? "default" : request.Site.Trim();
@@ -286,21 +302,28 @@ public sealed class IntegrationSetupService : IDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            var hint = string.IsNullOrEmpty(totpSecret) ? string.Empty : ComputeTotpHint(totpSecret);
+            var hint = string.IsNullOrEmpty(totpSecret) ? string.Empty : BuildTotpHint(totpSecret);
             return new IntegrationSetupResult(false, "Failed: " + ex.Message + hint);
         }
     }
 
-    private static string ComputeTotpHint(string totpSecret)
+    /// <summary>
+    /// UniFi OS reports a wrong TOTP code with the same error it uses for a
+    /// wrong password, so a failed login with a 2FA secret set deserves a
+    /// pointer. The hint never includes a code computed from the secret: this
+    /// message travels back to the browser, and a live one-time code has no
+    /// business in an error string, a log, or a screenshot.
+    /// </summary>
+    private static string BuildTotpHint(string totpSecret)
     {
         try
         {
-            var code = TotpGenerator.GenerateCode(totpSecret);
-            return $" (The TOTP secret computes {code} right now - compare it against your authenticator app at this same moment. If they don't match, the secret itself is wrong.)";
+            _ = TotpGenerator.GenerateCode(totpSecret);
+            return " (If the password is right, re-check the 2FA secret you entered and that this device's clock is correct.)";
         }
         catch (FormatException)
         {
-            return " (The TOTP secret isn't valid base32, so no code could be computed from it - re-check what was pasted.)";
+            return " (The 2FA secret isn't valid base32, so no code could be computed from it - re-check what was pasted.)";
         }
     }
 

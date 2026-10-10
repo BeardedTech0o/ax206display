@@ -262,30 +262,26 @@ public partial class IntegrationsWindow : Window
         {
             // UniFi OS reports a wrong TOTP code with the exact same
             // AUTHENTICATION_FAILED_INVALID_CREDENTIALS code/message it uses
-            // for a wrong password - there's no way to tell them apart from
-            // the error alone. Showing what this secret computes right now
-            // lets a "this is definitely my password" report get checked
-            // directly against the authenticator app instead of guessing
-            // further - a mismatch here means the saved secret itself is
-            // wrong (e.g. a transcription slip if it was hand-typed rather
-            // than copy-pasted), not anything about the password.
+            // for a wrong password, so point at the 2FA secret as a possible
+            // cause. The hint deliberately never shows a code computed from
+            // the secret: a live one-time code doesn't belong on screen.
             var totpHint = string.IsNullOrEmpty(totpSecret)
                 ? string.Empty
-                : TryComputeTotpHint(totpSecret);
+                : TryBuildTotpHint(totpSecret);
             SetUniFiStatus("Failed: " + ex.Message + totpHint);
         }
     }
 
-    private static string TryComputeTotpHint(string totpSecret)
+    private static string TryBuildTotpHint(string totpSecret)
     {
         try
         {
-            var code = TotpGenerator.GenerateCode(totpSecret);
-            return $" (The TOTP secret currently entered computes {code} right now - compare it against your authenticator app at this same moment. If they don't match, the saved secret itself is wrong.)";
+            _ = TotpGenerator.GenerateCode(totpSecret);
+            return " (If the password is right, re-check the 2FA secret you entered and that this PC's clock is correct.)";
         }
         catch (FormatException)
         {
-            return " (The TOTP secret currently entered isn't valid base32, so no code could even be computed from it - re-check what was pasted into that field.)";
+            return " (The 2FA secret isn't valid base32, so no code could be computed from it - re-check what was pasted into that field.)";
         }
     }
 

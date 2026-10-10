@@ -91,7 +91,7 @@ public sealed class ProxmoxClient : IProxmoxClient
 
     private async Task<IReadOnlyList<ProxmoxGuestStatus>> GetGuestsForNodeAsync(string node, string guestType, CancellationToken cancellationToken)
     {
-        using var request = CreateAuthenticatedRequest(HttpMethod.Get, $"/api2/json/nodes/{node}/{guestType}");
+        using var request = CreateAuthenticatedRequest(HttpMethod.Get, $"/api2/json/nodes/{Uri.EscapeDataString(node)}/{guestType}");
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();

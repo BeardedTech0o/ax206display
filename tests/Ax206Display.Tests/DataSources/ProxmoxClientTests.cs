@@ -114,6 +114,42 @@ public class ProxmoxClientTests
         Assert.Equal("stopped", container.Status);
     }
 
+    [Fact]
+    public async Task GetGuestStatusesAsync_EscapesNodeNamesSoTheyCannotChangeTheRequestPath()
+    {
+        var guestPaths = new List<string>();
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+
+            if (path.EndsWith("/access/ticket", StringComparison.Ordinal))
+            {
+                const string ticketJson = """{ "data": { "ticket": "T", "CSRFPreventionToken": "C" } }""";
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(ticketJson, Encoding.UTF8, "application/json") };
+            }
+
+            if (path.EndsWith("/nodes", StringComparison.Ordinal))
+            {
+                const string nodesJson = """{ "data": [ { "node": "../../access/ticket", "status": "online", "cpu": 0, "mem": 0, "maxmem": 1, "uptime": 1 } ] }""";
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(nodesJson, Encoding.UTF8, "application/json") };
+            }
+
+            guestPaths.Add(path);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{ "data": [] }""", Encoding.UTF8, "application/json") };
+        });
+        var client = CreateClient(handler);
+        await client.LoginAsync("root", "hunter2");
+
+        await client.GetGuestStatusesAsync();
+
+        Assert.Equal(2, guestPaths.Count);
+        Assert.All(guestPaths, path =>
+        {
+            Assert.StartsWith("/api2/json/nodes/", path, StringComparison.Ordinal);
+            Assert.DoesNotContain("..", path.Split('/'));
+        });
+    }
+
     private static ProxmoxClient CreateClient(FakeHttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://pve.local:8006") };

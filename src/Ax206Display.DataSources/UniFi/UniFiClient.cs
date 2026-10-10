@@ -112,7 +112,7 @@ public sealed class UniFiClient : IUniFiClient
 
     public async Task<UniFiSiteStatus> GetSiteHealthAsync(string site = "default", CancellationToken cancellationToken = default)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"/proxy/network/api/s/{site}/stat/health");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/proxy/network/api/s/{Uri.EscapeDataString(site)}/stat/health");
         if (_csrfToken is not null)
         {
             request.Headers.Add("X-CSRF-Token", _csrfToken);
