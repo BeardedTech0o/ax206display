@@ -13,7 +13,10 @@
          to silently downgrade below that floor. -->
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
 
-    <!-- Pinned to the last version with a plain net8.0 target; 0.9.6+ moved to net8.0-windows7.0. -->
+    <!-- Pinned to the last version with a plain net8.0 target; 0.9.6+ moved to
+         net8.0-windows7.0. The app targets net10.0-windows now, so newer
+         versions would restore; the pin is just not lifted yet because that
+         needs a run on real Windows hardware. -->
     <PackageVersion Include="LibreHardwareMonitorLib" Version="0.9.5" />
 
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
@@ -24,10 +27,14 @@
          (mono/SkiaSharp#3272) - i.e. every Raspberry Pi. -->
     <PackageVersion Include="SkiaSharp" Version="3.119.4" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="3.119.4" />
-    <!-- Pinned to the last version with a net8.0-windows target; 3.119.4 moved to net9.0-windows. -->
+    <!-- Pinned to the last version with a net8.0-windows target; 3.119.4 moved
+         to net9.0-windows, which the net10.0-windows app can now use. Not
+         lifted yet: it needs a run on real Windows hardware. -->
     <PackageVersion Include="SkiaSharp.Views.WPF" Version="3.119.2" />
 
-    <!-- Pinned to the last version with a net8.0-windows7.0 target; 2.4.x moved to net10.0-windows7.0. -->
+    <!-- Pinned to the last version with a net8.0-windows7.0 target; 2.4.x moved
+         to net10.0-windows7.0, which the app can now use. Not lifted yet: it
+         needs a run on real Windows hardware. -->
     <PackageVersion Include="H.NotifyIcon.Wpf" Version="2.3.2" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />

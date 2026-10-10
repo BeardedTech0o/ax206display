@@ -68,8 +68,9 @@ public sealed class SecretStore
         // process umask, so the encrypted blobs are never briefly (or
         // permanently, when the binary is started by hand with a 022 umask)
         // readable by other accounts. Windows relies on the directory ACL.
-        var tempPath = _filePath + ".tmp";
-        File.Delete(tempPath);
+        // A unique name per save, so two saves running at once can't trip
+        // over each other's temp file; the last rename wins.
+        var tempPath = $"{_filePath}.{Guid.NewGuid():N}.tmp";
 
         var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
         if (!OperatingSystem.IsWindows())
@@ -77,12 +78,22 @@ public sealed class SecretStore
             options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
         }
 
-        await using (var stream = new FileStream(tempPath, options))
+        try
         {
-            await JsonSerializer.SerializeAsync(stream, snapshot, SerializerOptions, cancellationToken);
-        }
+            await using (var stream = new FileStream(tempPath, options))
+            {
+                await JsonSerializer.SerializeAsync(stream, snapshot, SerializerOptions, cancellationToken);
+            }
 
-        File.Move(tempPath, _filePath, overwrite: true);
+            File.Move(tempPath, _filePath, overwrite: true);
+        }
+        catch
+        {
+            // A failed or cancelled write must not leave a partial secrets
+            // file lying around.
+            File.Delete(tempPath);
+            throw;
+        }
     }
 
     public void SetSecret(string key, string plaintextValue)

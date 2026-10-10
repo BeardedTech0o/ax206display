@@ -178,7 +178,7 @@ public static class DeviceEndpoints
         // Read just the header first. A few KB of PNG can declare tens of
         // thousands of pixels per side, and decoding that would exhaust a
         // Pi's memory long before the 20 MB byte cap mattered.
-        using (var data = SKData.CreateCopy(buffer.ToArray()))
+        using (var data = SKData.CreateCopy(buffer.GetBuffer().AsSpan(0, (int)buffer.Length)))
         using (var codec = SKCodec.Create(data))
         {
             if (codec is null)

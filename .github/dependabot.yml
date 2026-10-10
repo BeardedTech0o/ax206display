@@ -15,8 +15,10 @@ updates:
     groups:
       nuget-minor-and-patch:
         update-types: ["minor", "patch"]
-    # Several packages are deliberately pinned to the last release that
-    # still targets net8.0 (see the comments in Directory.Packages.props).
+    # These packages are pinned to the last release that targeted net8.0
+    # (see Directory.Packages.props). The app is on net10.0 now, so the pins
+    # can be lifted once the Windows app has been run against newer versions;
+    # until then, don't let Dependabot open PRs that nobody can test in CI.
     ignore:
       - dependency-name: "SkiaSharp.Views.WPF"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]

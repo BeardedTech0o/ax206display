@@ -13,6 +13,14 @@ namespace Ax206Display.DataSources.Http;
 /// Pi-hole on the same Pi or a UniFi console on the LAN is exactly the
 /// intended use.
 /// </summary>
+/// <remarks>
+/// This is a guard rail for an authenticated, LAN-oriented admin feature, not
+/// a complete SSRF defence. It checks the address as typed and as it resolves
+/// right now; a hostile DNS server could still answer differently when the
+/// real connection resolves again, and any port is accepted. Redirects are
+/// handled separately: <see cref="IntegrationHttpClientFactory"/> never
+/// follows them.
+/// </remarks>
 public static class IntegrationTargetPolicy
 {
     /// <summary>Returns an error message for a rejected address, or null when it is fine to connect.</summary>
@@ -57,6 +65,12 @@ public static class IntegrationTargetPolicy
                 // report that; there is nothing to block.
                 return null;
             }
+            catch (ArgumentException)
+            {
+                // The resolver rejects a malformed or over-long host name
+                // outright (it is not a SocketException).
+                return "Enter a valid host URL first.";
+            }
         }
 
         return addresses.Any(IsBlockedAddress)
@@ -82,11 +96,23 @@ public static class IntegrationTargetPolicy
         {
             var bytes = address.GetAddressBytes();
 
-            // 169.254.0.0/16 (includes the 169.254.169.254 metadata endpoint)
-            // and 224.0.0.0/4 multicast.
-            return (bytes[0] == 169 && bytes[1] == 254) || (bytes[0] & 0xF0) == 224;
+            // 0.0.0.0/8 ("this network"), 169.254.0.0/16 (includes the
+            // 169.254.169.254 metadata endpoint), 224.0.0.0/4 multicast, and
+            // the other fixed metadata addresses cloud providers use:
+            // Azure's 168.63.129.16 and Alibaba's 100.100.100.200.
+            return bytes[0] == 0
+                || (bytes[0] == 169 && bytes[1] == 254)
+                || (bytes[0] & 0xF0) == 224
+                || address.Equals(AzureWireServer)
+                || address.Equals(AlibabaMetadata);
         }
 
-        return address.IsIPv6LinkLocal || address.IsIPv6Multicast;
+        // fe80::/10 link-local, ff00::/8 multicast, and AWS's IPv6 metadata
+        // endpoint fd00:ec2::254.
+        return address.IsIPv6LinkLocal || address.IsIPv6Multicast || address.Equals(AwsMetadataV6);
     }
+
+    private static readonly IPAddress AzureWireServer = IPAddress.Parse("168.63.129.16");
+    private static readonly IPAddress AlibabaMetadata = IPAddress.Parse("100.100.100.200");
+    private static readonly IPAddress AwsMetadataV6 = IPAddress.Parse("fd00:ec2::254");
 }

@@ -35,7 +35,12 @@ public static class IntegrationHttpClientFactory
 
     public static HttpClientHandler CreateHandler(IntegrationConfig config, bool enableCookies)
     {
-        var handler = new HttpClientHandler { UseCookies = enableCookies };
+        // Never follow redirects: these clients send a login (username and
+        // password in the body) to the one address the user configured. A
+        // redirect would re-send it somewhere else, or reach an address that
+        // IntegrationTargetPolicy never saw. Real integration APIs answer
+        // directly, so a redirect is better reported as a failure.
+        var handler = new HttpClientHandler { UseCookies = enableCookies, AllowAutoRedirect = false };
         if (enableCookies)
         {
             handler.CookieContainer = new CookieContainer();

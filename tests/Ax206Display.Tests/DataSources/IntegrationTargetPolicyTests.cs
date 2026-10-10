@@ -15,6 +15,11 @@ public class IntegrationTargetPolicyTests
     [InlineData("::")]
     [InlineData("ff02::1")]
     [InlineData("::ffff:169.254.169.254")]
+    [InlineData("0.0.0.1")]
+    [InlineData("0.255.255.255")]
+    [InlineData("168.63.129.16")]        // Azure
+    [InlineData("100.100.100.200")]      // Alibaba
+    [InlineData("fd00:ec2::254")]        // AWS IPv6 metadata
     public void IsBlockedAddress_BlocksLinkLocalUnspecifiedAndMulticast(string address)
     {
         Assert.True(IntegrationTargetPolicy.IsBlockedAddress(IPAddress.Parse(address)));
@@ -28,6 +33,8 @@ public class IntegrationTargetPolicyTests
     [InlineData("8.8.8.8")]
     [InlineData("::1")]
     [InlineData("fd00::1")]
+    [InlineData("100.64.0.1")]           // carrier-grade NAT range, e.g. Tailscale
+    [InlineData("168.63.129.17")]
     public void IsBlockedAddress_AllowsLoopbackAndPrivateLanAddresses(string address)
     {
         Assert.False(IntegrationTargetPolicy.IsBlockedAddress(IPAddress.Parse(address)));
@@ -61,6 +68,18 @@ public class IntegrationTargetPolicyTests
     public async Task CheckAsync_AcceptsLanAndLoopbackAddresses(string url)
     {
         Assert.Null(await IntegrationTargetPolicy.CheckAsync(url));
+    }
+
+    [Fact]
+    public async Task CheckAsync_RejectsAHostNameTheResolverCannotAccept()
+    {
+        // Longer than the 255-character DNS limit: the resolver throws
+        // ArgumentException for this, which must become a clean rejection.
+        var url = "https://" + new string('a', 300) + ".example";
+
+        var error = await IntegrationTargetPolicy.CheckAsync(url);
+
+        Assert.NotNull(error);
     }
 
     [Fact]

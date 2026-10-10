@@ -52,11 +52,12 @@ public static class AutoStartService
         }
     }
 
+    // Program Files only. The Windows folder is not on this list on purpose:
+    // it has user-writable subfolders (Temp, Tasks).
     private static string[] ProtectedRoots() =>
     [
         Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
         Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-        Environment.GetFolderPath(Environment.SpecialFolder.Windows),
     ];
 
     public static void Unregister()

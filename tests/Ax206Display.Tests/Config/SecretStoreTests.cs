@@ -103,11 +103,43 @@ public class SecretStoreTests : IDisposable
             await store.SaveAsync();
         }
 
-        Assert.False(File.Exists(_filePath + ".tmp"));
+        Assert.Empty(Directory.GetFiles(_tempDirectory, "*.tmp"));
 
         var reloaded = new SecretStore(new FakeSecretProtector(), _filePath);
         await reloaded.LoadAsync();
         Assert.Equal("v2", reloaded.GetSecret("k"));
+    }
+
+    [Fact]
+    public async Task SaveAsync_ConcurrentSavesAllSucceedAndLeaveAValidFile()
+    {
+        var store = new SecretStore(new FakeSecretProtector(), _filePath);
+        store.SetSecret("k", "v");
+
+        await Task.WhenAll(Enumerable.Range(0, 25).Select(_ => store.SaveAsync()));
+
+        Assert.Empty(Directory.GetFiles(_tempDirectory, "*.tmp"));
+        var reloaded = new SecretStore(new FakeSecretProtector(), _filePath);
+        await reloaded.LoadAsync();
+        Assert.Equal("v", reloaded.GetSecret("k"));
+    }
+
+    [Fact]
+    public async Task SaveAsync_FailedSaveLeavesNoTempFileAndKeepsTheOldFile()
+    {
+        var store = new SecretStore(new FakeSecretProtector(), _filePath);
+        store.SetSecret("k", "original");
+        await store.SaveAsync();
+
+        store.SetSecret("k", "changed");
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.SaveAsync(cancelled.Token));
+
+        Assert.Empty(Directory.GetFiles(_tempDirectory, "*.tmp"));
+        var reloaded = new SecretStore(new FakeSecretProtector(), _filePath);
+        await reloaded.LoadAsync();
+        Assert.Equal("original", reloaded.GetSecret("k"));
     }
 
     public void Dispose()
