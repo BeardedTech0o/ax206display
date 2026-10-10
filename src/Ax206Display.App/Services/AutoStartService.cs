@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Ax206Display.Config.Services;
 
 namespace Ax206Display.App.Services;
 
@@ -23,6 +24,18 @@ public static class AutoStartService
         var exePath = Environment.ProcessPath
             ?? throw new InvalidOperationException("Could not determine the running executable's path.");
 
+        // The task below runs this exe with the highest privileges at every
+        // logon. If the exe sits somewhere a normal user can write (Downloads,
+        // the Desktop - where the portable zip tends to end up), any program
+        // running as that user could swap it, or its libusb-1.0.dll, and get
+        // administrator rights at the next logon.
+        if (!ProtectedPathCheck.IsUnderProtectedRoot(exePath, ProtectedRoots()))
+        {
+            throw new InvalidOperationException(
+                "Starting with Windows runs this app with administrator rights, so it has to be installed somewhere only administrators can change, such as Program Files. " +
+                "Install it with the MSI installer (or move the folder there) and try again.");
+        }
+
         // schtasks.exe re-parses /TR's value as its own mini command line (so
         // it can support "/TR \"app.exe\" -arg"), so the path needs an
         // embedded literal quote pair here even though ArgumentList below
@@ -38,6 +51,13 @@ public static class AutoStartService
             throw new InvalidOperationException($"Failed to register the auto-start task: {result.StandardError}");
         }
     }
+
+    private static string[] ProtectedRoots() =>
+    [
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+        Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+    ];
 
     public static void Unregister()
     {
