@@ -27,7 +27,7 @@ jobs:
     env:
       HAS_SIGNING_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_PFX_BASE64 != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Resolve release tag
         id: tag
@@ -45,7 +45,7 @@ jobs:
           "version=$($tag.TrimStart('v'))" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: "8.0.x"
 
@@ -205,7 +205,7 @@ jobs:
         # arm64 = 64-bit Raspberry Pi OS (Pi 3/4/5), arm = 32-bit Pi OS.
         rid: [linux-arm64, linux-arm, linux-x64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # Values arrive through env, never pasted into the script: a tag typed
       # into the dispatch form is user input.
@@ -224,7 +224,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: "8.0.x"
 
