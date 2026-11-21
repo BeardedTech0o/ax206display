@@ -12,7 +12,7 @@ public class TotpGeneratorTests
     // which is just the last 6 digits of the same underlying dynamic
     // truncation - so each expected value below is the RFC's published
     // 8-digit code with its leading 2 digits dropped.
-    private const string Rfc6238SecretSha1Base32 = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+    private const string Rfc6238SecretSha1Base32 = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"; // gitleaks:allow (public RFC 6238 test key, base32 of "12345678901234567890")
 
     [Theory]
     [InlineData(59, "287082")]
