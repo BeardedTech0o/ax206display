@@ -717,6 +717,10 @@ function renderDevicePanel() {
     h('div', { class: 'row' },
       upload,
       h('button', { type: 'button', class: 'btn small', onclick: () => upload.click() }, device.hasBackgroundImage ? 'Replace…' : 'Upload…'),
+      device.hasBackgroundImage ? h('a', {
+        class: 'btn small', href: `/api/devices/${encodeURIComponent(device.id)}/background`,
+        download: '', title: 'Download the background currently applied to this display',
+      }, 'Download') : null,
       device.hasBackgroundImage ? h('button', {
         type: 'button', class: 'btn small danger', onclick: async () => {
           await api('DELETE', `/devices/${encodeURIComponent(device.id)}/background`);

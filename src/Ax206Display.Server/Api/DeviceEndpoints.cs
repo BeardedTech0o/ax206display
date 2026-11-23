@@ -45,6 +45,7 @@ public static class DeviceEndpoints
         api.MapPut("/devices/{id}", UpdateDeviceAsync);
         api.MapDelete("/devices/{id}", ForgetDeviceAsync);
         api.MapPost("/devices/{id}/preview", PreviewAsync);
+        api.MapGet("/devices/{id}/background", DownloadBackgroundAsync);
         api.MapPut("/devices/{id}/background", UploadBackgroundAsync);
         api.MapDelete("/devices/{id}/background", RemoveBackgroundAsync);
     }
@@ -209,6 +210,40 @@ public static class DeviceEndpoints
 
         DeleteIfManaged(paths, previousPath);
         return Results.NoContent();
+    }
+
+    /// <summary>
+    /// Returns the background currently applied to the display as a PNG
+    /// download. The file is decoded and re-encoded rather than streamed raw,
+    /// so a config carried over from Windows can't make this endpoint serve
+    /// an arbitrary non-image file from disk.
+    /// </summary>
+    private static async Task<IResult> DownloadBackgroundAsync(string id, ConfigService configService, CancellationToken cancellationToken)
+    {
+        var config = await configService.LoadAsync(cancellationToken);
+        var profile = config.Devices.FirstOrDefault(d => d.Id == id);
+        if (profile is null || string.IsNullOrEmpty(profile.BackgroundImagePath) || !File.Exists(profile.BackgroundImagePath))
+        {
+            return Results.NotFound();
+        }
+
+        using var bitmap = SKBitmap.Decode(profile.BackgroundImagePath);
+        if (bitmap is null)
+        {
+            return Results.NotFound();
+        }
+
+        using var image = SKImage.FromBitmap(bitmap);
+        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
+        return Results.File(encoded.ToArray(), "image/png", BackgroundFileName(profile.Name));
+    }
+
+    private static string BackgroundFileName(string? deviceName)
+    {
+        var safe = new string((deviceName ?? string.Empty)
+            .Where(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+            .ToArray());
+        return $"{(safe.Length == 0 ? "display" : safe)}-background.png";
     }
 
     private static async Task<IResult> RemoveBackgroundAsync(string id, ConfigService configService, Ax206DisplayPaths paths, CancellationToken cancellationToken)
